@@ -1,0 +1,185 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+  <meta name="theme-color" content="#06060f">
+  <meta name="description" content="Hatch-Bound: Beast Arena — Raise and battle super-animal creatures in real time.">
+  <title>HatchBound: Beast Arena</title>
+  <link rel="stylesheet" href="css/main.css">
+</head>
+<body>
+<div id="app">
+
+  <!-- ====================================================
+       TITLE SCREEN
+       ==================================================== -->
+  <div id="screen-title" class="screen">
+    <canvas id="title-particles"></canvas>
+    <div class="title-content">
+      <div class="title-logo">
+        <span class="title-egg">🥚</span>
+        <div class="title-main">HatchBound</div>
+        <div class="title-sub">Beast Arena</div>
+      </div>
+      <div class="title-egg-row">
+        <span>🦎</span><span>🦁</span><span>🐉</span>
+      </div>
+      <p class="title-tagline">"You don't just collect the fighter. You raise the fighter."</p>
+      <div class="title-buttons">
+        <button id="btn-new-game" class="btn-primary">🥚 Begin New Journey</button>
+        <button id="btn-continue" class="btn-secondary" style="display:none">⚡ Continue</button>
+      </div>
+      <div class="title-version">v1.0 · 2026 Edition · 12 Creatures · 100 Levels</div>
+    </div>
+  </div>
+
+  <!-- ====================================================
+       CHOOSE CATEGORY
+       ==================================================== -->
+  <div id="screen-choose-category" class="screen">
+    <div class="cat-screen-title">Choose Your Bloodline</div>
+    <p class="cat-screen-sub">Your creature's core power comes from its ancient lineage.</p>
+    <div id="category-grid"></div>
+  </div>
+
+  <!-- ====================================================
+       CHOOSE CREATURE
+       ==================================================== -->
+  <div id="screen-choose-creature" class="screen">
+    <div class="screen-header">
+      <button class="btn-back" onclick="showScreen('choose-category')">← Back</button>
+      <h2>Choose Your Beast</h2>
+    </div>
+    <div class="scroll-area" style="padding-top:4px">
+      <div id="creature-grid"></div>
+    </div>
+  </div>
+
+  <!-- ====================================================
+       NAME CREATURE
+       ==================================================== -->
+  <div id="screen-name-creature" class="screen">
+    <div class="screen-header" style="justify-content:center">
+      <h2>Name Your Egg</h2>
+    </div>
+    <div style="flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;padding:24px">
+      <p class="name-screen-sub">This creature will be yours forever.<br>Give it a name that matters.</p>
+      <div id="name-creature-preview"></div>
+      <input id="creature-name-input" type="text" maxlength="20" autocomplete="off" spellcheck="false" placeholder="Name your creature...">
+      <div style="width:100%;max-width:320px">
+        <button id="btn-begin-incubation" class="btn-primary">🥚 Begin Incubation</button>
+      </div>
+      <button class="btn-secondary" style="width:100%;max-width:320px;margin-top:10px"
+              onclick="showScreen('choose-creature')">← Back</button>
+    </div>
+  </div>
+
+  <!-- ====================================================
+       INCUBATION
+       ==================================================== -->
+  <div id="screen-incubation" class="screen">
+    <div class="scroll-area">
+      <div id="incubation-content"></div>
+    </div>
+  </div>
+
+  <!-- ====================================================
+       HATCHING
+       ==================================================== -->
+  <div id="screen-hatching" class="screen">
+    <div id="hatch-container"></div>
+    <div style="padding:0 24px 32px;width:100%;max-width:400px;margin:0 auto">
+      <button id="btn-after-hatch" class="btn-primary" onclick="showScreen('home')" style="display:none">
+        💗 Meet Your Beast!
+      </button>
+    </div>
+  </div>
+
+  <!-- ====================================================
+       HOME
+       ==================================================== -->
+  <div id="screen-home" class="screen">
+    <div class="scroll-area">
+      <div id="home-content"></div>
+    </div>
+  </div>
+
+  <!-- ====================================================
+       TRAINING
+       ==================================================== -->
+  <div id="screen-train" class="screen">
+    <div class="scroll-area">
+      <div id="train-content"></div>
+    </div>
+  </div>
+
+  <!-- ====================================================
+       BATTLE PREPARATION
+       ==================================================== -->
+  <div id="screen-battle-prep" class="screen">
+    <div class="scroll-area">
+      <div id="battle-prep-content"></div>
+    </div>
+  </div>
+
+  <!-- ====================================================
+       BATTLE
+       ==================================================== -->
+  <div id="screen-battle" class="screen">
+    <div id="battle-content"></div>
+  </div>
+
+  <!-- ====================================================
+       BATTLE RESULT
+       ==================================================== -->
+  <div id="screen-battle-result" class="screen">
+    <div id="battle-result-content"></div>
+  </div>
+
+  <!-- ====================================================
+       PROFILE
+       ==================================================== -->
+  <div id="screen-profile" class="screen">
+    <div class="scroll-area">
+      <div id="profile-content"></div>
+    </div>
+  </div>
+
+  <!-- ====================================================
+       COLLECTION
+       ==================================================== -->
+  <div id="screen-collection" class="screen">
+    <div class="scroll-area">
+      <div id="collection-content"></div>
+    </div>
+  </div>
+
+</div><!-- /app -->
+
+<!-- Global toast notification -->
+<div id="toast"></div>
+
+<!-- Game scripts (order matters) -->
+<script src="js/data.js"></script>
+<script src="js/battle.js"></script>
+<script src="js/game.js"></script>
+
+<!-- Hatch screen post-hatch button timing -->
+<script>
+  // Show "meet your beast" button a bit after hatching
+  document.addEventListener('DOMContentLoaded', () => {
+    const orig = window.showScreen;
+    window.showScreen = function(id, data) {
+      orig(id, data);
+      if (id === 'hatching') {
+        setTimeout(() => {
+          const btn = document.getElementById('btn-after-hatch');
+          if (btn) btn.style.display = 'block';
+        }, 4500);
+      }
+    };
+  });
+</script>
+</body>
+</html>
