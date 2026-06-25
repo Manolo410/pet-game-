@@ -331,7 +331,9 @@ const SCREENS = {
       card.style.setProperty('--creature-color', c.color);
       card.style.setProperty('--creature-glow', c.glow);
       card.innerHTML = `
-        <div class="csc-emoji" style="filter:drop-shadow(0 0 18px ${c.glow})">${c.emoji}</div>
+        <div class="csc-sprite" style="filter:drop-shadow(0 0 18px ${c.glow})">
+          ${getSpriteHTML(c.id, 'baby', 90)}
+        </div>
         <div class="csc-name">${c.name}</div>
         <div class="csc-title">${c.title}</div>
         <div class="csc-role">${c.role}</div>
@@ -368,7 +370,9 @@ const SCREENS = {
     const input   = document.getElementById('creature-name-input');
     if (preview) {
       preview.innerHTML = `
-        <div class="creature-preview-emoji" style="color:${def.color};filter:drop-shadow(0 0 20px ${def.glow})">${def.emoji}</div>
+        <div class="creature-preview-sprite" style="filter:drop-shadow(0 0 20px ${def.glow})">
+          ${getSpriteHTML(G.selectedCreature, 'baby', 130)}
+        </div>
         <div class="preview-type">${def.title}</div>
       `;
     }
@@ -399,7 +403,9 @@ const SCREENS = {
       container.innerHTML = `
         <div class="hatch-egg" id="hatch-egg-anim">🥚</div>
         <div class="hatch-creature hidden" id="hatch-creature-reveal">
-          <div class="hatch-emoji" style="color:${def.color};filter:drop-shadow(0 0 30px ${def.glow})">${def.emoji}</div>
+          <div class="hatch-sprite" style="filter:drop-shadow(0 0 30px ${def.glow})">
+            ${getSpriteHTML(G.creature.id, 'baby', 150)}
+          </div>
           <div class="hatch-name">${G.creature.name}</div>
           <div class="hatch-subtitle">A ${def.stages.baby.name} hatched!</div>
         </div>
@@ -489,9 +495,9 @@ function renderHome() {
 
     <div class="creature-stage">
       <div class="creature-aura" style="background:radial-gradient(circle, ${def.glow} 0%, transparent 70%)"></div>
-      <div class="creature-main-emoji stage-${stageDef.id}" id="home-creature-sprite"
-           style="font-size:${90 + c.level * 0.5}px; filter:drop-shadow(0 0 ${12 + c.level/10}px ${def.glow})">
-        ${def.emoji}
+      <div class="creature-main-sprite" id="home-creature-sprite"
+           style="filter:drop-shadow(0 0 ${12 + c.level/10}px ${def.glow})">
+        ${getSpriteHTML(c.id, stageDef.id, Math.min(150, 100 + Math.floor(c.level * 0.5)))}
       </div>
       <div class="creature-name-display">${c.name}</div>
       <div class="creature-subtitle">${stageInfo ? stageInfo.name : ''} · ${def.title}</div>
@@ -838,13 +844,17 @@ function renderBattlePrep() {
 
     <div class="bp-matchup">
       <div class="bp-fighter player-side">
-        <div class="bp-fighter-emoji" style="filter:drop-shadow(0 0 16px ${def.glow})">${def.emoji}</div>
+        <div class="bp-fighter-sprite" style="filter:drop-shadow(0 0 16px ${def.glow})">
+          ${getSpriteHTML(G.creature.id, stageFromLevel(G.creature.level).id, 72)}
+        </div>
         <div class="bp-fighter-name">${G.creature.name}</div>
         <div class="bp-fighter-level">Lv.${G.creature.level}</div>
       </div>
       <div class="bp-vs">VS</div>
       <div class="bp-fighter opponent-side">
-        <div class="bp-fighter-emoji" style="filter:drop-shadow(0 0 16px ${oppDef.glow})">${oppDef.emoji}</div>
+        <div class="bp-fighter-sprite" style="filter:drop-shadow(0 0 16px ${oppDef.glow})">
+          ${getSpriteHTML(G.opponent.creature, stageFromLevel(G.opponent.level).id, 72)}
+        </div>
         <div class="bp-fighter-name">${G.opponent.name}</div>
         <div class="bp-challenger-name">${G.opponent.name}</div>
         <div class="bp-fighter-level">Lv.${G.opponent.level}</div>
@@ -947,42 +957,71 @@ function startBattle() {
 
 // ---- Battle Screen ----
 function renderBattleScreen() {
-  const def    = CREATURES[G.creature.id];
-  const oppDef = CREATURES[G.opponent.creature];
+  const def      = CREATURES[G.creature.id];
+  const oppDef   = CREATURES[G.opponent.creature];
+  const stageDef = stageFromLevel(G.creature.level);
+  const oppStage = stageFromLevel(G.opponent.level);
   const el = document.getElementById('battle-content');
   if (!el) return;
 
+  const oppMaxHp = Math.floor(oppDef.baseStats.maxHp * (1 + (G.opponent.level - 1) * 0.03));
+
   el.innerHTML = `
     <div class="battle-arena">
-      <div class="battle-bg-particles"></div>
 
-      <div class="battle-top">
-        <div class="bf-fighter opponent-fighter">
-          <div class="bf-name">${G.opponent.name}</div>
-          <div class="bf-emoji" id="battle-opp-sprite" style="filter:drop-shadow(0 0 16px ${oppDef.glow})">${oppDef.emoji}</div>
-          <div class="hp-bar-container">
-            <div class="hp-bar-label">HP <span id="battle-opp-hp">${Math.floor(oppDef.baseStats.maxHp * (1 + (G.opponent.level-1)*0.03))}/${Math.floor(oppDef.baseStats.maxHp * (1+(G.opponent.level-1)*0.03))}</span></div>
-            <div class="hp-bar-track"><div class="hp-bar-fill" id="battle-opp-hpbar" style="width:100%;background:#10b981"></div></div>
-          </div>
+      <div class="battle-landscape">
+        <div class="battle-sky"></div>
+        <div class="battle-midground">
+          <div class="opp-platform"></div>
+          <div class="player-platform"></div>
         </div>
       </div>
 
-      <div class="battle-middle"></div>
-
-      <div class="battle-bottom">
-        <div class="bf-fighter player-fighter">
-          <div class="hp-bar-container">
-            <div class="hp-bar-label">HP <span id="battle-player-hp">${G.creature.hp}/${G.creature.maxHp}</span></div>
-            <div class="hp-bar-track"><div class="hp-bar-fill" id="battle-player-hpbar" style="width:${(G.creature.hp/G.creature.maxHp)*100}%;background:#10b981"></div></div>
+      <!-- Opponent: HP box left, sprite right -->
+      <div class="battle-opp-row">
+        <div class="battle-infobox opp-infobox">
+          <div class="bib-name-row">
+            <span class="bib-name">${G.opponent.name}</span>
+            <span class="bib-level">Lv.${G.opponent.level}</span>
           </div>
-          <div class="bf-emoji" id="battle-player-sprite" style="filter:drop-shadow(0 0 16px ${def.glow})">${def.emoji}</div>
-          <div class="bf-name">${G.creature.name}</div>
+          <div class="bib-hp-row">
+            <span class="bib-hp-label">HP</span>
+            <div class="bib-hp-track">
+              <div class="bib-hp-fill" id="battle-opp-hpbar" style="width:100%;background:#3a9e38"></div>
+            </div>
+          </div>
+          <div class="bib-hp-num" id="battle-opp-hp">${oppMaxHp}/${oppMaxHp}</div>
+        </div>
+        <div class="opp-sprite-area" id="battle-opp-sprite">
+          ${getSpriteHTML(G.opponent.creature, oppStage.id, 110)}
         </div>
       </div>
 
-      <div class="battle-log-panel">
+      <!-- Player: sprite left, HP box right -->
+      <div class="battle-player-row">
+        <div class="player-sprite-area" id="battle-player-sprite">
+          ${getSpriteHTML(G.creature.id, stageDef.id, 128)}
+        </div>
+        <div class="battle-infobox player-infobox">
+          <div class="bib-name-row">
+            <span class="bib-name">${G.creature.name}</span>
+            <span class="bib-level">Lv.${G.creature.level}</span>
+          </div>
+          <div class="bib-hp-row">
+            <span class="bib-hp-label">HP</span>
+            <div class="bib-hp-track">
+              <div class="bib-hp-fill" id="battle-player-hpbar" style="width:${(G.creature.hp/G.creature.maxHp)*100}%;background:#3a9e38"></div>
+            </div>
+          </div>
+          <div class="bib-hp-num" id="battle-player-hp">${G.creature.hp}/${G.creature.maxHp}</div>
+        </div>
+      </div>
+
+      <!-- Pokémon-style dialog box -->
+      <div class="battle-dialog-box">
         <div class="battle-log" id="battle-log"></div>
       </div>
+
     </div>
   `;
 
@@ -1037,7 +1076,9 @@ function renderBattleResult() {
     <div class="result-screen ${won ? 'result-win' : 'result-lose'}">
       <div class="result-emoji">${won ? '🏆' : '💔'}</div>
       <div class="result-title">${won ? 'VICTORY!' : 'DEFEATED...'}</div>
-      <div class="result-creature" style="filter:drop-shadow(0 0 20px ${def.glow})">${def.emoji}</div>
+      <div class="result-creature" style="filter:drop-shadow(0 0 20px ${def.glow})">
+        ${getSpriteHTML(G.creature.id, stageFromLevel(G.creature.level).id, 120)}
+      </div>
       <div class="result-name">${G.creature.name}</div>
       <div class="result-stats">
         <div class="rs-stat">HP Remaining: ${result.playerHpLeft} / ${G.creature.maxHp}</div>
@@ -1067,7 +1108,9 @@ function renderProfile() {
       <h2>📊 Creature Profile</h2>
     </div>
     <div class="profile-creature">
-      <div class="profile-emoji" style="filter:drop-shadow(0 0 24px ${def.glow})">${def.emoji}</div>
+      <div class="profile-sprite" style="filter:drop-shadow(0 0 24px ${def.glow})">
+        ${getSpriteHTML(c.id, stageDef.id, 130)}
+      </div>
       <div class="profile-name">${c.name}</div>
       <div class="profile-title">${stageInfo ? stageInfo.name : ''} · ${def.title}</div>
     </div>
@@ -1154,7 +1197,9 @@ function renderCollection() {
         const elem = ELEMENTS[c.element];
         return `
           <div class="codex-card ${discovered ? 'discovered' : 'undiscovered'}">
-            <div class="cc-emoji" style="${discovered ? `filter:drop-shadow(0 0 12px ${c.glow})` : 'filter:grayscale(1) brightness(0.3)'}">${discovered ? c.emoji : '❓'}</div>
+            <div class="cc-sprite" style="${discovered ? `filter:drop-shadow(0 0 10px ${c.glow})` : 'filter:grayscale(1) brightness(0.3) opacity(0.45)'}">
+              ${discovered ? getSpriteHTML(c.id, 'baby', 58) : '<span style="font-size:1.8rem;line-height:60px;display:block;text-align:center">❓</span>'}
+            </div>
             <div class="cc-name">${discovered ? c.name : '???'}</div>
             ${discovered ? `<div class="cc-elem" style="color:${elem.color}">${elem.icon} ${elem.name}</div>` : ''}
             <div class="cc-category">${discovered ? c.category : '---'}</div>
@@ -1204,7 +1249,7 @@ function startParticles() {
     vx: (Math.random() - 0.5) * 0.4,
     vy: (Math.random() - 0.5) * 0.4,
     alpha: Math.random() * 0.6 + 0.2,
-    color: ['#00f5ff','#bf5fff','#ff6b35','#ffd700'][Math.floor(Math.random()*4)]
+    color: ['#d4a032','#e07830','#c85828','#e8c040'][Math.floor(Math.random()*4)]
   }));
 
   function draw() {
