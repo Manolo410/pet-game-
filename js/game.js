@@ -50,10 +50,22 @@ function createCreature(id, name) {
     nightSessions: 0,
     evolutionPath: null,
     equippedMoves: def.moves.slice(0, 3),
+    equippedGear: { weapon: null, armor: null, trinket: null },
+    gearInventory: [],
+    colorTint: 0,
     createdAt: Date.now(),
     lastCareTime: Date.now(),
     incubationStats: { warmth:0, comfort:0, energy:0, stability:0, bond:0 }
   };
+}
+
+// ---- Ensure creature has all required fields (for old saves) ----
+function ensureCreatureFields(c) {
+  if (!c) return c;
+  if (!c.equippedGear)   c.equippedGear   = { weapon: null, armor: null, trinket: null };
+  if (!c.gearInventory)  c.gearInventory  = [];
+  if (c.colorTint === undefined) c.colorTint = 0;
+  return c;
 }
 
 // ---- Save / Load ----
@@ -75,7 +87,7 @@ function loadGame() {
     if (!raw) return false;
     const data = JSON.parse(raw);
     G.coins = data.coins || 100;
-    G.creature = data.creature || null;
+    G.creature = ensureCreatureFields(data.creature || null);
     G.collection = data.collection || [];
     G.inventory = data.inventory || ['basic_meat','bandage'];
     G.incubation = data.incubation || null;
@@ -464,6 +476,10 @@ const SCREENS = {
 
   collection() {
     renderCollection();
+  },
+
+  gear() {
+    renderGearScreen();
   }
 };
 
@@ -471,6 +487,7 @@ const SCREENS = {
 function renderHome() {
   const c = G.creature;
   if (!c) { showScreen('title'); return; }
+  ensureCreatureFields(c);
   const def = CREATURES[c.id];
   const stageDef = stageFromLevel(c.level);
   const stageInfo = def.stages[stageDef.id];
@@ -480,6 +497,17 @@ function renderHome() {
   const xpPct = c.level >= 100 ? 100 : Math.floor((c.xp / xpNeeded) * 100);
   const evPath = determineEvolutionPath(c);
   const elem = ELEMENTS[def.element];
+
+  const tintFilter = c.colorTint ? `hue-rotate(${c.colorTint}deg)` : '';
+  const glowFilter = `drop-shadow(0 0 ${12 + c.level/10}px ${def.glow})`;
+
+  // Gear badges for equipped items
+  const eq = c.equippedGear;
+  const gearBadges = [
+    eq.weapon  ? `<span class="cgb cgb-weapon"  title="${GEAR[eq.weapon].name}">${GEAR[eq.weapon].icon}</span>`   : '',
+    eq.armor   ? `<span class="cgb cgb-armor"   title="${GEAR[eq.armor].name}">${GEAR[eq.armor].icon}</span>`    : '',
+    eq.trinket ? `<span class="cgb cgb-trinket" title="${GEAR[eq.trinket].name}">${GEAR[eq.trinket].icon}</span>` : ''
+  ].filter(Boolean).join('');
 
   const el = document.getElementById('home-content');
   if (!el) return;
@@ -496,9 +524,10 @@ function renderHome() {
     <div class="creature-stage">
       <div class="creature-aura" style="background:radial-gradient(circle, ${def.glow} 0%, transparent 70%)"></div>
       <div class="creature-main-sprite" id="home-creature-sprite"
-           style="filter:drop-shadow(0 0 ${12 + c.level/10}px ${def.glow})">
+           style="filter:${glowFilter} ${tintFilter}">
         ${getSpriteHTML(c.id, stageDef.id, Math.min(150, 100 + Math.floor(c.level * 0.5)))}
       </div>
+      ${gearBadges ? `<div class="creature-gear-badges">${gearBadges}</div>` : ''}
       <div class="creature-name-display">${c.name}</div>
       <div class="creature-subtitle">${stageInfo ? stageInfo.name : ''} · ${def.title}</div>
       <div class="personality-badge" style="background:rgba(255,255,255,0.08)">
@@ -542,7 +571,8 @@ function renderHome() {
     <div class="home-actions-row">
       <button class="btn-battle" onclick="showScreen('battle-prep')">⚔️ Battle!</button>
       <button class="btn-profile" onclick="showScreen('profile')">📊 Profile</button>
-      <button class="btn-collection" onclick="showScreen('collection')">📖 Collection</button>
+      <button class="btn-gear" onclick="showScreen('gear')">🗡️ Gear</button>
+      <button class="btn-collection" onclick="showScreen('collection')">📖 Codex</button>
     </div>
 
     <div class="evolution-hint">
@@ -957,6 +987,7 @@ function startBattle() {
 
 // ---- Battle Screen ----
 function renderBattleScreen() {
+  ensureCreatureFields(G.creature);
   const def      = CREATURES[G.creature.id];
   const oppDef   = CREATURES[G.opponent.creature];
   const stageDef = stageFromLevel(G.creature.level);
@@ -965,6 +996,7 @@ function renderBattleScreen() {
   if (!el) return;
 
   const oppMaxHp = Math.floor(oppDef.baseStats.maxHp * (1 + (G.opponent.level - 1) * 0.03));
+  const tintFilter = G.creature.colorTint ? `hue-rotate(${G.creature.colorTint}deg)` : '';
 
   el.innerHTML = `
     <div class="battle-arena">
@@ -976,6 +1008,9 @@ function renderBattleScreen() {
           <div class="player-platform"></div>
         </div>
       </div>
+
+      <!-- Move name banner -->
+      <div class="battle-move-banner hidden" id="battle-move-banner"></div>
 
       <!-- Opponent: HP box left, sprite right -->
       <div class="battle-opp-row">
@@ -999,7 +1034,8 @@ function renderBattleScreen() {
 
       <!-- Player: sprite left, HP box right -->
       <div class="battle-player-row">
-        <div class="player-sprite-area" id="battle-player-sprite">
+        <div class="player-sprite-area" id="battle-player-sprite"
+             style="${tintFilter ? `filter:${tintFilter}` : ''}">
           ${getSpriteHTML(G.creature.id, stageDef.id, 128)}
         </div>
         <div class="battle-infobox player-infobox">
@@ -1021,6 +1057,9 @@ function renderBattleScreen() {
       <div class="battle-dialog-box">
         <div class="battle-log" id="battle-log"></div>
       </div>
+
+      <!-- Attack visual effects layer -->
+      <div class="battle-fx-layer" id="battle-fx-layer"></div>
 
     </div>
   `;
@@ -1052,7 +1091,19 @@ function renderBattleScreen() {
       const xpReward = 40 + G.opponent.level * 5;
       grantXP(xpReward);
       G.coins += 20 + G.opponent.level * 2;
-      showToast(`🏆 Victory! +${xpReward} XP!`);
+      // Chance to earn gear from battle
+      if (Math.random() < 0.3) {
+        const pool = Object.keys(GEAR).filter(gid => {
+          const g = GEAR[gid];
+          return g.rarity === 'common' || (G.opponent.level >= 12 && g.rarity === 'rare');
+        });
+        const earnedId = pool[Math.floor(Math.random() * pool.length)];
+        ensureCreatureFields(G.creature);
+        G.creature.gearInventory.push(earnedId);
+        showToast(`🏆 Victory! +${xpReward} XP! Found: ${GEAR[earnedId].name}!`);
+      } else {
+        showToast(`🏆 Victory! +${xpReward} XP!`);
+      }
     } else {
       G.creature.hp = Math.max(1, Math.floor(G.creature.maxHp * 0.1));
       G.creature.recoveryEvents++;
@@ -1178,6 +1229,46 @@ function renderProfile() {
         }).join('')}
       </div>
     </div>
+
+    ${(() => {
+      const lore = CREATURE_LORE[c.id];
+      if (!lore) return '';
+      const rivalDef = CREATURES[lore.rival];
+      return `
+        <div class="lore-card">
+          <div class="lore-title">📖 ${def.name}'s Lore</div>
+          <div class="lore-origin">${lore.origin}</div>
+          <div class="lore-trait-row">
+            <span class="lore-trait-label">Unique Trait</span>
+            <span class="lore-trait-text">${lore.trait}</span>
+          </div>
+          ${rivalDef ? `<div class="lore-rival">Rival: <b>${rivalDef.name}</b> <span style="opacity:0.6">(${rivalDef.title})</span></div>` : ''}
+          <div class="lore-quote">${lore.quote}</div>
+        </div>
+      `;
+    })()}
+
+    <div class="customize-card">
+      <div class="customize-title">🎨 Customize ${c.name}</div>
+      <div class="customize-tints">
+        ${[
+          { label:'Natural', tint:0 },
+          { label:'Ember',   tint:25  },
+          { label:'Spring',  tint:75  },
+          { label:'Ocean',   tint:155 },
+          { label:'Night',   tint:215 },
+          { label:'Mystic',  tint:275 },
+          { label:'Coral',   tint:340 }
+        ].map(opt => `
+          <button class="tint-btn ${c.colorTint === opt.tint ? 'tint-active' : ''}"
+                  onclick="setColorTint(${opt.tint})"
+                  style="${opt.tint !== 0 ? `filter:hue-rotate(${opt.tint}deg) saturate(1.5)` : ''}">
+            <div class="tint-swatch" style="background:${def.color};${opt.tint !== 0 ? `filter:hue-rotate(${opt.tint}deg)` : ''}"></div>
+            <span>${opt.label}</span>
+          </button>
+        `).join('')}
+      </div>
+    </div>
   `;
 }
 
@@ -1208,6 +1299,192 @@ function renderCollection() {
       }).join('')}
     </div>
   `;
+}
+
+// ---- Gear Screen ----
+function renderGearScreen() {
+  const c = G.creature;
+  if (!c) { showScreen('home'); return; }
+  ensureCreatureFields(c);
+  const def = CREATURES[c.id];
+  const el = document.getElementById('gear-content');
+  if (!el) return;
+
+  const eq  = c.equippedGear;
+  const inv = c.gearInventory;
+
+  const rarityColor = { common:'#a09a80', rare:'#4a90e2', epic:'#c084fc', legend:'#e09020' };
+  const slotIcon    = { weapon:'⚔️', armor:'🛡️', trinket:'💫' };
+  const slotLabel   = { weapon:'Weapon', armor:'Armor', trinket:'Trinket' };
+
+  // Compute total gear bonuses
+  const totals = { atk:0, def:0, spd:0, hp:0 };
+  ['weapon','armor','trinket'].forEach(slot => {
+    if (eq[slot] && GEAR[eq[slot]]) {
+      Object.entries(GEAR[eq[slot]].bonus).forEach(([k,v]) => { totals[k] = (totals[k]||0) + v; });
+    }
+  });
+
+  const bonusChips = Object.entries(totals).filter(([,v]) => v > 0)
+    .map(([k,v]) => `<span class="gear-bonus-chip">+${v} ${k.toUpperCase()}</span>`).join('');
+
+  const tintFilter = c.colorTint ? `hue-rotate(${c.colorTint}deg)` : '';
+
+  const gearCard = (gearId, showEquip = true) => {
+    const g = GEAR[gearId];
+    if (!g) return '';
+    const isEquipped  = eq[g.slot] === gearId;
+    const bonusText   = Object.entries(g.bonus).map(([k,v]) => `<span>+${v} ${k.toUpperCase()}</span>`).join('');
+    return `
+      <div class="gear-card ${isEquipped ? 'gear-equipped' : ''}" style="--rarity:${rarityColor[g.rarity]}">
+        <div class="gc-left">
+          <div class="gc-icon">${g.icon}</div>
+          <div class="gc-rarity-dot" style="background:${rarityColor[g.rarity]}"></div>
+        </div>
+        <div class="gc-info">
+          <div class="gc-name">${g.name} <span class="gc-rarity" style="color:${rarityColor[g.rarity]}">${g.rarity}</span></div>
+          <div class="gc-bonus">${bonusText}</div>
+          <div class="gc-desc">${g.desc}</div>
+        </div>
+        ${showEquip ? `
+          <div class="gc-action">
+            ${isEquipped
+              ? `<button class="gear-btn gear-unequip" onclick="unequipGear('${g.slot}')">✕</button>`
+              : `<button class="gear-btn gear-equip"   onclick="equipGear('${gearId}')">Equip</button>`}
+          </div>` : ''}
+      </div>
+    `;
+  };
+
+  const shopCard = (gearId) => {
+    const g = GEAR[gearId];
+    if (!g) return '';
+    const ownedInInv  = inv.includes(gearId);
+    const ownedEquip  = Object.values(eq).includes(gearId);
+    const owned       = ownedInInv || ownedEquip;
+    const bonusText   = Object.entries(g.bonus).map(([k,v]) => `<span>+${v} ${k.toUpperCase()}</span>`).join('');
+    return `
+      <div class="gear-card shop-card ${owned ? 'shop-owned' : ''}" style="--rarity:${rarityColor[g.rarity]}">
+        <div class="gc-left">
+          <div class="gc-icon">${g.icon}</div>
+          <div class="gc-rarity-dot" style="background:${rarityColor[g.rarity]}"></div>
+        </div>
+        <div class="gc-info">
+          <div class="gc-name">${g.name} <span class="gc-rarity" style="color:${rarityColor[g.rarity]}">${g.rarity}</span></div>
+          <div class="gc-bonus">${bonusText}</div>
+        </div>
+        <div class="gc-action">
+          ${owned
+            ? `<span class="gear-owned-badge">✓</span>`
+            : `<button class="gear-btn gear-buy ${G.coins < g.cost ? 'gear-cant-buy' : ''}"
+                       onclick="buyGear('${gearId}')">💰${g.cost}</button>`}
+        </div>
+      </div>
+    `;
+  };
+
+  // Gear in inventory (not equipped)
+  const unequippedInv = inv.filter(gid => !Object.values(eq).includes(gid));
+  const allOwned = [...Object.values(eq).filter(Boolean), ...unequippedInv];
+
+  el.innerHTML = `
+    <div class="gear-header">
+      <button class="btn-back" onclick="showScreen('home')">← Back</button>
+      <h2>⚔️ Equipment</h2>
+      <div class="home-coins">💰 ${G.coins}</div>
+    </div>
+
+    <div class="gear-creature-display">
+      <div class="gear-sprite-wrap" style="filter:drop-shadow(0 0 20px ${def.glow}) ${tintFilter}">
+        ${getSpriteHTML(c.id, stageFromLevel(c.level).id, 100)}
+      </div>
+      <div class="gear-slots-row">
+        ${['weapon','armor','trinket'].map(slot => {
+          const gid = eq[slot];
+          const g   = gid ? GEAR[gid] : null;
+          return `
+            <div class="gear-slot ${g ? 'slot-filled' : 'slot-empty'}"
+                 style="${g ? `--rarity:${rarityColor[g.rarity]};border-color:${rarityColor[g.rarity]}40` : ''}">
+              <div class="gs-icon">${g ? g.icon : slotIcon[slot]}</div>
+              <div class="gs-label">${g ? g.name : slotLabel[slot]}</div>
+            </div>
+          `;
+        }).join('')}
+      </div>
+      ${bonusChips
+        ? `<div class="gear-stat-bonuses">${bonusChips}</div>`
+        : `<div class="gear-no-bonus">Equip gear to boost your stats in battle</div>`}
+    </div>
+
+    ${allOwned.length > 0 ? `
+      <div class="gear-section-title">🎒 Your Gear</div>
+      <div class="gear-list">
+        ${allOwned.map(gid => gearCard(gid)).join('')}
+      </div>
+    ` : `
+      <div class="gear-empty">Win battles or visit the shop to earn gear!</div>
+    `}
+
+    <div class="gear-section-title">🛒 Gear Shop</div>
+    <div class="gear-list">
+      ${Object.keys(GEAR).map(gid => shopCard(gid)).join('')}
+    </div>
+  `;
+}
+
+function equipGear(gearId) {
+  const c = G.creature;
+  const g = GEAR[gearId];
+  if (!g || !c) return;
+  ensureCreatureFields(c);
+
+  const inv = c.gearInventory;
+  const eq  = c.equippedGear;
+
+  // Remove from inventory if it's there
+  const idx = inv.indexOf(gearId);
+  if (idx !== -1) inv.splice(idx, 1);
+
+  // Unequip existing in that slot
+  if (eq[g.slot] && eq[g.slot] !== gearId) inv.push(eq[g.slot]);
+
+  eq[g.slot] = gearId;
+  saveGame();
+  renderGearScreen();
+  showToast(`${g.icon} ${g.name} equipped!`);
+}
+
+function unequipGear(slot) {
+  const c = G.creature;
+  if (!c) return;
+  ensureCreatureFields(c);
+  const gid = c.equippedGear[slot];
+  if (!gid) return;
+  c.gearInventory.push(gid);
+  c.equippedGear[slot] = null;
+  saveGame();
+  renderGearScreen();
+  showToast('Gear unequipped.');
+}
+
+function buyGear(gearId) {
+  const g = GEAR[gearId];
+  if (!g || !G.creature) return;
+  if (G.coins < g.cost) { showToast('💰 Not enough coins!'); return; }
+  G.coins -= g.cost;
+  ensureCreatureFields(G.creature);
+  G.creature.gearInventory.push(gearId);
+  saveGame();
+  renderGearScreen();
+  showToast(`🎁 Bought ${g.name}!`);
+}
+
+function setColorTint(tint) {
+  if (!G.creature) return;
+  G.creature.colorTint = tint;
+  saveGame();
+  renderProfile();
+  showToast('🎨 Color updated!');
 }
 
 // ---- Utility Renderers ----

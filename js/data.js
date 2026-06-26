@@ -441,3 +441,99 @@ function calcElementDamage(atkElement, defElement) {
   if (!ELEMENT_CHART[atkElement] || !ELEMENT_CHART[atkElement][defElement]) return 1;
   return ELEMENT_CHART[atkElement][defElement];
 }
+
+// ---- GEAR DATABASE ----
+const GEAR = {
+  // Weapons
+  iron_fang:     { id:'iron_fang',     name:'Iron Fang',     icon:'⚔️', slot:'weapon',  rarity:'common', bonus:{atk:8},               desc:'+8 ATK. Sharp iron tips.',                   cost:50  },
+  flame_blade:   { id:'flame_blade',   name:'Flame Blade',   icon:'🔥', slot:'weapon',  rarity:'rare',   bonus:{atk:15},              desc:'+15 ATK. Forged in magma.',                  cost:120 },
+  storm_talon:   { id:'storm_talon',   name:'Storm Talon',   icon:'⚡', slot:'weapon',  rarity:'rare',   bonus:{atk:12, spd:8},       desc:'+12 ATK, +8 SPD.',                           cost:140 },
+  shadow_claw:   { id:'shadow_claw',   name:'Shadow Claw',   icon:'🌑', slot:'weapon',  rarity:'epic',   bonus:{atk:20, spd:10},      desc:'+20 ATK, +10 SPD.',                          cost:210 },
+  void_fang:     { id:'void_fang',     name:'Void Fang',     icon:'🗡️', slot:'weapon',  rarity:'legend', bonus:{atk:30, spd:15},      desc:'+30 ATK, +15 SPD. Legendary.',               cost:400 },
+  // Armor
+  stone_plate:   { id:'stone_plate',   name:'Stone Plate',   icon:'🪨', slot:'armor',   rarity:'common', bonus:{def:10},              desc:'+10 DEF.',                                   cost:50  },
+  ember_hide:    { id:'ember_hide',    name:'Ember Hide',    icon:'🛡️', slot:'armor',   rarity:'rare',   bonus:{def:14, hp:20},       desc:'+14 DEF, +20 Max HP.',                       cost:130 },
+  crystal_shell: { id:'crystal_shell', name:'Crystal Shell', icon:'💎', slot:'armor',   rarity:'epic',   bonus:{def:22, hp:35},       desc:'+22 DEF, +35 Max HP.',                       cost:220 },
+  titan_ward:    { id:'titan_ward',    name:'Titan Ward',    icon:'🔰', slot:'armor',   rarity:'legend', bonus:{def:35, hp:60},       desc:'+35 DEF, +60 HP. Legendary.',                cost:420 },
+  // Trinkets
+  swift_charm:   { id:'swift_charm',   name:'Swift Charm',   icon:'💫', slot:'trinket', rarity:'common', bonus:{spd:10},              desc:'+10 SPD.',                                   cost:50  },
+  hp_crystal:    { id:'hp_crystal',    name:'HP Crystal',    icon:'❤️', slot:'trinket', rarity:'rare',   bonus:{hp:30},               desc:'+30 Max HP.',                                cost:110 },
+  power_ring:    { id:'power_ring',    name:'Power Ring',    icon:'💍', slot:'trinket', rarity:'epic',   bonus:{atk:10, def:10},      desc:'+10 ATK, +10 DEF.',                          cost:190 },
+  soul_gem:      { id:'soul_gem',      name:'Soul Gem',      icon:'🔮', slot:'trinket', rarity:'legend', bonus:{atk:15, def:15, spd:15}, desc:'+15 all stats. Legendary.',              cost:450 }
+};
+
+// ---- CREATURE LORE ----
+const CREATURE_LORE = {
+  komodo: {
+    origin: 'Born in the volcanic swamps of Toxwood Isle, the Komodo line carries the oldest venom in existence — a brew refined over 10,000 years of evolution. Even the earth fears its touch.',
+    trait:  'Venom Seep: Every strike has a 15% chance to coat the arena in toxic residue, dealing bonus damage over time.',
+    rival:  'dinosaur',
+    quote:  '"Stand still. The venom does the work."'
+  },
+  snake: {
+    origin: 'Children of the First Shadow — the Serpentis line claims descent from the cosmic serpent who swallowed the first sun. Their scales absorb light itself.',
+    trait:  'Phase Strike: Once per battle, can attack from the shadow plane, bypassing all defensive buffs entirely.',
+    rival:  'bat',
+    quote:  '"You heard nothing. You saw nothing. Yet here we are."'
+  },
+  dinosaur: {
+    origin: 'Unearthed from a geological layer dating back 65 million years, Dinorawr is not a recreation — it is the original. Every stomp echoes through time.',
+    trait:  'Seismic Presence: Opponents with lower defense take amplified damage from all of Dinorawr\'s ground-based moves.',
+    rival:  'komodo',
+    quote:  '"Ancient power does not need to be explained. It just is."'
+  },
+  gorilla: {
+    origin: 'The Gorrox line emerged from the ruins of the Battle Citadel, training generation after generation in unarmed combat. Every knuckle carries the story of ten thousand fights.',
+    trait:  'Combo Fury: Each consecutive hit in a round deals 10% more damage, peaking at devastating triple-hit combos.',
+    rival:  'bear',
+    quote:  '"Keep hitting. The wall breaks before the fist does."'
+  },
+  fire_lion: {
+    origin: 'Descended from the Solar Guardians — ethereal fire lions that kept the first dawn burning. Emberclaw carries a fragment of the original sun in its core, never extinguished.',
+    trait:  'Solar Aura: Fire moves gradually increase in power as the Solar Aura builds charge across rounds of battle.',
+    rival:  'storm_shark',
+    quote:  '"The sun chose me. What more do you need to know?"'
+  },
+  bear: {
+    origin: 'The Bruinax line was carved from living granite by ancient craftspeople who needed an unstoppable guardian. They breathed life into stone — and the stone remembered how to fight.',
+    trait:  'Granite Body: After taking three consecutive hits, Bruinax enters a hardened state and reflects 20% of incoming damage.',
+    rival:  'gorilla',
+    quote:  '"Every hit you land just makes me angrier. Keep going."'
+  },
+  bat: {
+    origin: 'Born from the void between stars, the Nocturnis line does not fear darkness — they are made of it. Each generation grows more shadow than flesh, more night than creature.',
+    trait:  'Lifedrain Aura: All shadow moves drain a small amount of HP regardless of damage type dealt.',
+    rival:  'snake',
+    quote:  '"I don\'t need to see you. I can hear your heartbeat slowing."'
+  },
+  eagle: {
+    origin: 'The Stormtalon line has never touched the ground voluntarily. Born at altitude, they live in the permanent storm layer above the clouds, where winds reach terminal velocity.',
+    trait:  'Tailwind: The first three moves of a battle deal bonus wind damage as Stormtalon builds speed momentum.',
+    rival:  'owl',
+    quote:  '"From up here, every fight looks like a foregone conclusion."'
+  },
+  owl: {
+    origin: 'Hypnowl descends from the Dream Watchers — ancient beings that stood between the sleeping world and the waking one. Their eyes see both simultaneously at all times.',
+    trait:  'Dreamstate: Moves that inflict sleep or confusion have higher base chance and last one additional turn.',
+    rival:  'eagle',
+    quote:  '"While you were planning your next move, I already saw it end."'
+  },
+  sea_dragon: {
+    origin: 'The Tidalrex line guarded the Abyssal Gates before recorded history. They carry the memory of every ocean current and every creature that ever drowned in the deep.',
+    trait:  'Tidal Mastery: Water moves gain bonus power based on round depth — moves in rounds 5+ deal significantly more damage.',
+    rival:  'jellyfish',
+    quote:  '"The ocean does not negotiate. Neither do I."'
+  },
+  storm_shark: {
+    origin: 'Born in the eye of the Perpetual Storm — a permanent electrical hurricane off the coast of Voltstrand. Shocktide has never experienced calm water and would not know what to do with it.',
+    trait:  'Static Field: After using an electric move, leaves a charged field that deals electric damage to any opponent who attacks next turn.',
+    rival:  'fire_lion',
+    quote:  '"Speed and voltage. Everything else is just moving slower."'
+  },
+  jellyfish: {
+    origin: 'Lumilux is theorized to be a colony organism — thousands of luminescent entities acting as one. No one has ever proven this. No one who has tried can remember their findings.',
+    trait:  'Crystal Resonance: Status effects stack additional duration when the opponent already carries a different status.',
+    rival:  'sea_dragon',
+    quote:  '"I don\'t win fights. I end them at a cellular level."'
+  }
+};

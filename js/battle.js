@@ -16,12 +16,26 @@ const Battle = (() => {
     const stageDef = stageFromLevel(creature.level);
     const statMult = 1 + (creature.level - 1) * 0.03;
 
-    const hp  = Math.floor((def.baseStats.maxHp  + (pers.bonuses.hp  || 0)) * statMult);
-    const atk = Math.floor((def.baseStats.atk    + (pers.bonuses.atk || 0)) * statMult);
-    const def_ = Math.floor((def.baseStats.def   + (pers.bonuses.def || 0)) * statMult);
-    const spd = Math.floor((def.baseStats.spd    + (pers.bonuses.spd || 0)) * statMult);
+    let hp  = Math.floor((def.baseStats.maxHp  + (pers.bonuses.hp  || 0)) * statMult);
+    let atk = Math.floor((def.baseStats.atk    + (pers.bonuses.atk || 0)) * statMult);
+    let def_ = Math.floor((def.baseStats.def   + (pers.bonuses.def || 0)) * statMult);
+    let spd = Math.floor((def.baseStats.spd    + (pers.bonuses.spd || 0)) * statMult);
 
     const careBonus = isPlayer ? Math.min(20, Math.floor((creature.trainingCount || 0) / 5)) : 0;
+
+    // Apply gear bonuses for player
+    if (isPlayer && creature.equippedGear && typeof GEAR !== 'undefined') {
+      ['weapon', 'armor', 'trinket'].forEach(slot => {
+        const gearId = creature.equippedGear[slot];
+        if (gearId && GEAR[gearId]) {
+          const bonus = GEAR[gearId].bonus;
+          if (bonus.atk) atk  += bonus.atk;
+          if (bonus.def) def_ += bonus.def;
+          if (bonus.spd) spd  += bonus.spd;
+          if (bonus.hp)  hp   += bonus.hp;
+        }
+      });
+    }
 
     return {
       id:        creature.id,
@@ -298,19 +312,75 @@ const Battle = (() => {
     }).join('');
   }
 
+  // ---- Visual effect helpers ----
+  function showMoveBanner(moveName, color) {
+    const banner = document.getElementById('battle-move-banner');
+    if (!banner) return;
+    banner.textContent = moveName;
+    banner.style.color = color || '#fff';
+    banner.style.setProperty('--banner-color', color || '#fff');
+    banner.classList.remove('hidden', 'banner-show');
+    void banner.offsetWidth; // force reflow
+    banner.classList.add('banner-show');
+    setTimeout(() => banner.classList.add('hidden'), 1200);
+  }
+
+  function spawnAttackEffect(element, targetSide) {
+    const fxLayer = document.getElementById('battle-fx-layer');
+    if (!fxLayer) return;
+    const fx = document.createElement('div');
+    fx.className = `battle-fx fx-${element} fx-target-${targetSide}`;
+    fxLayer.appendChild(fx);
+    setTimeout(() => fx.remove(), 900);
+  }
+
+  function spawnDamageNumber(dmg, targetSide, elemMult) {
+    const arena = document.querySelector('.battle-arena');
+    if (!arena) return;
+    const num = document.createElement('div');
+    let cls = 'battle-dmg-num';
+    if (elemMult >= 1.25)  cls += ' dmg-super';
+    else if (elemMult <= 0.8) cls += ' dmg-weak';
+    num.className = cls;
+    num.textContent = dmg;
+    num.style.left = targetSide === 'opp' ? (55 + Math.random() * 15) + '%' : (10 + Math.random() * 15) + '%';
+    num.style.top  = targetSide === 'opp' ? (12 + Math.random() * 12) + '%' : (48 + Math.random() * 10) + '%';
+    arena.appendChild(num);
+    setTimeout(() => num.remove(), 1100);
+  }
+
   // ---- DOM playback ----
   async function playBattle(result, playerC, opponentC) {
-    const p1HpPct = hpPercent(playerC.maxHp, playerC.maxHp);
-    const p2HpPct = hpPercent(opponentC.maxHp, opponentC.maxHp);
-    let p1Hp = playerC.maxHp;
-    let p2Hp = opponentC.maxHp;
-
     for (const round of result.rounds) {
       for (const ev of round.events) {
+
+        // Visual effects fire BEFORE the log entry
+        if (ev.type === 'move') {
+          const move = MOVES[ev.move];
+          if (move && ELEMENTS[move.element]) {
+            showMoveBanner(move.name, ELEMENTS[move.element].color);
+          }
+          const src = ev.attacker === playerC.id ? p1Sprite : p2Sprite;
+          if (src) {
+            src.classList.add('attack-lunge');
+            setTimeout(() => src.classList.remove('attack-lunge'), 500);
+          }
+          if (move) spawnAttackEffect(move.element, ev.attacker === playerC.id ? 'opp' : 'player');
+        }
+
+        if (ev.type === 'damage') {
+          const target = ev.target === opponentC.id ? p2Sprite : p1Sprite;
+          if (target) {
+            target.classList.add('hit-shake');
+            setTimeout(() => target.classList.remove('hit-shake'), 500);
+          }
+          spawnDamageNumber(ev.dmg, ev.target === opponentC.id ? 'opp' : 'player', ev.elemMult || 1);
+        }
+
         await addLog(ev);
         await sleep(600);
 
-        // Update HP bars
+        // Update HP bars after log
         const p1Pct = hpPercent(round.playerHp, playerC.maxHp);
         const p2Pct = hpPercent(round.opponentHp, opponentC.maxHp);
 
@@ -324,22 +394,6 @@ const Battle = (() => {
         }
         if (p1HpNum) p1HpNum.textContent = round.playerHp + '/' + playerC.maxHp;
         if (p2HpNum) p2HpNum.textContent = round.opponentHp + '/' + opponentC.maxHp;
-
-        // Shake animations
-        if (ev.type === 'damage') {
-          const target = ev.target === opponentC.id ? p2Sprite : p1Sprite;
-          if (target) {
-            target.classList.add('hit-shake');
-            setTimeout(() => target.classList.remove('hit-shake'), 500);
-          }
-        }
-        if (ev.type === 'move') {
-          const src = ev.attacker === playerC.id ? p1Sprite : p2Sprite;
-          if (src) {
-            src.classList.add('attack-lunge');
-            setTimeout(() => src.classList.remove('attack-lunge'), 500);
-          }
-        }
       }
       await sleep(400);
     }
