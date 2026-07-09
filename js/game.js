@@ -111,7 +111,10 @@ function grantXP(amount) {
       G.notifications.push({ type:'evolve', stage: newStage });
     }
   }
-  if (leveled) saveGame();
+  if (leveled) {
+    saveGame();
+    SFX.levelup();
+  }
   return leveled;
 }
 
@@ -143,6 +146,7 @@ function careAction(action) {
   G.careActionCooldown[action] = now;
 
   const c = G.creature;
+  let xpGained = 0;
 
   switch(action) {
     case 'feed':
@@ -150,7 +154,7 @@ function careAction(action) {
       c.hunger = Math.min(100, c.hunger + 25);
       c.happiness = Math.min(100, c.happiness + 5);
       c.affectionCount++;
-      grantXP(8);
+      xpGained = 8; grantXP(8);
       showToast('Nom nom! Hunger restored!');
       break;
     case 'bathe':
@@ -158,7 +162,7 @@ function careAction(action) {
       c.hygiene = Math.min(100, c.hygiene + 30);
       c.happiness = Math.min(100, c.happiness + 5);
       c.affectionCount++;
-      grantXP(6);
+      xpGained = 6; grantXP(6);
       showToast('Fresh and clean!');
       break;
     case 'train':
@@ -166,14 +170,14 @@ function careAction(action) {
       c.energy = Math.max(0, c.energy - 15);
       c.trainingCount++;
       c.happiness = Math.min(100, c.happiness + 3);
-      grantXP(15);
+      xpGained = 15; grantXP(15);
       showToast('Training complete! XP gained!');
       break;
     case 'bond':
       c.happiness = Math.min(100, c.happiness + 20);
       c.bondLevel = Math.min(100, c.bondLevel + 2);
       c.affectionCount++;
-      grantXP(10);
+      xpGained = 10; grantXP(10);
       showToast('Your bond grows stronger!');
       break;
     case 'play':
@@ -182,7 +186,7 @@ function careAction(action) {
       c.energy = Math.max(0, c.energy - 10);
       c.hunger = Math.max(0, c.hunger - 5);
       c.affectionCount++;
-      grantXP(8);
+      xpGained = 8; grantXP(8);
       showToast('Playtime! Pure joy!');
       break;
     case 'sleep':
@@ -190,14 +194,14 @@ function careAction(action) {
       const isNight = new Date().getHours() >= 20 || new Date().getHours() < 6;
       if (isNight) { c.nightSessions++; showToast('Night rest! Bonus stat gain!'); }
       else { showToast('Taking a nap...'); }
-      grantXP(5);
+      xpGained = 5; grantXP(5);
       break;
   }
 
   c.lastCareTime = Date.now();
   drainStats();
   saveGame();
-  return true;
+  return { xp: xpGained };
 }
 
 // ---- Stat decay over time ----
@@ -299,7 +303,7 @@ function getEggHTML(bond, creatureColor, creatureGlow) {
   const cracks = getEggCrackSVG(bond);
 
   return `
-    <div class="egg-container ${animClass}">
+    <div class="egg-container ${animClass}" onclick="tapEgg()" title="Pet the egg!">
       <div class="egg-glow-aura" style="
         background: radial-gradient(circle, ${creatureGlow} 0%, transparent 65%);
         opacity: ${glowOpacity};
@@ -330,6 +334,30 @@ function getEggHTML(bond, creatureColor, creatureGlow) {
       </svg>
     </div>
   `;
+}
+
+// ---- Egg petting: heartbeat thump, wiggle, and a slow trickle of bond ----
+let lastEggTapReward = 0;
+function tapEgg() {
+  const incu = G.incubation;
+  const egg = document.querySelector('.egg-container');
+  if (!incu || !egg) return;
+  SFX.thump();
+  egg.classList.remove('egg-tapped');
+  void egg.offsetWidth; // restart the animation
+  egg.classList.add('egg-tapped');
+  showEmote(egg, ['💗', '♪', '✨'][Math.floor(Math.random() * 3)]);
+
+  const now = Date.now();
+  if (now - lastEggTapReward > 10000 && incu.bond < BOND_THRESHOLD) {
+    lastEggTapReward = now;
+    incu.bond = Math.min(BOND_THRESHOLD + 10, incu.bond + 1);
+    incu.stats.bond = Math.min(100, incu.stats.bond + 1);
+    saveGame();
+    // Refresh the screen once the tap animation has played, so the
+    // state message and Hatch button stay in sync with the new bond.
+    if (incu.bond >= BOND_THRESHOLD) setTimeout(() => renderIncubation(), 600);
+  }
 }
 
 // ---- Egg state message ----
@@ -390,8 +418,8 @@ function startWarmGame() {
   const heatBtn = document.getElementById('wg-heat-btn');
 
   // Heating on press
-  heatBtn.addEventListener('mousedown', () => { if (!gameOver) temp = Math.min(100, temp + 8); });
-  heatBtn.addEventListener('touchstart', (e) => { e.preventDefault(); if (!gameOver) temp = Math.min(100, temp + 8); });
+  heatBtn.addEventListener('mousedown', () => { if (!gameOver) { temp = Math.min(100, temp + 8); SFX.tap(); } });
+  heatBtn.addEventListener('touchstart', (e) => { e.preventDefault(); if (!gameOver) { temp = Math.min(100, temp + 8); SFX.tap(); } });
 
   const gameLoop = setInterval(() => {
     if (gameOver || !incuGameActive(token)) { clearInterval(gameLoop); return; }
@@ -436,6 +464,7 @@ function startWarmGame() {
         msgEl.textContent = `+${bondGain} bond from warming!`;
         msgEl.style.color = '#f59e0b';
       }
+      SFX.good();
       showToast(`Warmth session done! +${bondGain} bond`);
       setTimeout(() => renderIncubation(), 1500);
     }
@@ -515,8 +544,10 @@ function startRockGame() {
     const perfect = needlePos >= 35 && needlePos <= 65;
     if (perfect) {
       perfectRocks++;
+      SFX.good();
       if (msgEl) msgEl.textContent = 'Perfect rock!';
     } else {
+      SFX.tap();
       if (msgEl) msgEl.textContent = 'Good rock!';
     }
 
@@ -549,6 +580,7 @@ function startRockGame() {
       incu.careActions.push({ stat: 'comfort', time: Date.now() });
       saveGame();
       if (msgEl) msgEl.textContent = `+${bondGain} bond! (${perfectRocks} perfect)`;
+      SFX.good();
       showToast(`Rocking done! +${bondGain} bond`);
       setTimeout(() => renderIncubation(), 1500);
     }
@@ -606,6 +638,7 @@ function startSingGame() {
   function flashButton(idx, duration = 400) {
     return new Promise(resolve => {
       const btn = document.getElementById(`sg-btn-${idx}`);
+      SFX.note(idx);
       if (btn) btn.classList.add('simon-active');
       setTimeout(() => {
         if (btn) btn.classList.remove('simon-active');
@@ -649,6 +682,7 @@ function startSingGame() {
     incu.careActions.push({ stat: 'energy', time: Date.now() });
     saveGame();
     if (msgEl) msgEl.textContent = `Song complete! +${totalBond} bond`;
+    SFX.good();
     showToast(`Singing done! +${totalBond} bond`);
     setTimeout(() => renderIncubation(), 1500);
   }
@@ -661,6 +695,7 @@ function startSingGame() {
     const idx = parseInt(btn.dataset.idx);
 
     // Flash it
+    SFX.note(idx, 0.2);
     btn.classList.add('simon-active');
     setTimeout(() => btn.classList.remove('simon-active'), 200);
 
@@ -676,6 +711,7 @@ function startSingGame() {
       }
     } else {
       // Wrong - end game
+      SFX.bad();
       accepting = false;
       if (msgEl) msgEl.textContent = 'Wrong note! Song ended.';
       setTimeout(() => finishSingGame(), 1000);
@@ -769,6 +805,7 @@ function startShieldGame() {
     threat.addEventListener('click', () => {
       if (!alive || gameOver) return;
       alive = false;
+      SFX.block();
       threat.classList.add('threat-blocked');
       blocked++;
       if (blockedEl) blockedEl.textContent = blocked;
@@ -779,6 +816,7 @@ function startShieldGame() {
       e.preventDefault();
       if (!alive || gameOver) return;
       alive = false;
+      SFX.block();
       threat.classList.add('threat-blocked');
       blocked++;
       if (blockedEl) blockedEl.textContent = blocked;
@@ -804,6 +842,7 @@ function startShieldGame() {
         alive = false;
         clearInterval(moveLoop);
         hit++;
+        SFX.bad();
         if (hitEl) hitEl.textContent = hit;
         threat.classList.add('threat-hit');
         setTimeout(() => threat.remove(), 300);
@@ -853,6 +892,7 @@ function startShieldGame() {
     incu.careActions.push({ stat: 'stability', time: Date.now() });
     saveGame();
     if (msgEl) msgEl.textContent = `+${bondGain} bond! (${blocked} blocked, ${hit} hit)`;
+    SFX.good();
     showToast(`Shielding done! +${bondGain} bond`);
     setTimeout(() => renderIncubation(), 1500);
   };
@@ -876,6 +916,7 @@ function renderIncubation() {
     <div class="incu-header">
       <div class="incu-creature-name">${incu.creatureName}'s Egg</div>
       <div class="incu-category-label">${def.title}</div>
+      <button class="btn-mute" onclick="toggleMute(this)">${SFX.isMuted() ? '🔇' : '🔊'}</button>
     </div>
 
     <div class="egg-stage">
@@ -1083,6 +1124,7 @@ const SCREENS = {
       const creature = document.getElementById('hatch-creature-reveal');
       if (egg) egg.style.display = 'none';
       if (creature) creature.classList.remove('hidden');
+      SFX.hatch();
     }, 2500);
     setTimeout(() => {
       const bonusEl = document.getElementById('hatch-bonuses');
@@ -1099,6 +1141,11 @@ const SCREENS = {
       drainStats();
       renderHome();
     }, 30000);
+    if (G._moodTimer) clearInterval(G._moodTimer);
+    G._moodTimer = setInterval(() => {
+      if (G.screen !== 'home') { clearInterval(G._moodTimer); return; }
+      ambientMood();
+    }, 7000);
   },
 
   train() {
@@ -1129,6 +1176,108 @@ const SCREENS = {
     renderGearScreen();
   }
 };
+
+// ---- Liveliness helpers ----
+function showEmote(container, emoji) {
+  if (!container) return;
+  const b = document.createElement('div');
+  b.className = 'emote-bubble';
+  b.textContent = emoji;
+  b.style.left = (30 + Math.random() * 40) + '%';
+  container.appendChild(b);
+  setTimeout(() => b.remove(), 1400);
+}
+
+function spawnFloatText(container, text, color) {
+  if (!container) return;
+  const el = document.createElement('div');
+  el.className = 'float-text';
+  el.textContent = text;
+  if (color) el.style.color = color;
+  container.appendChild(el);
+  setTimeout(() => el.remove(), 1300);
+}
+
+let lastPokeReward = 0;
+function pokeCreature() {
+  const c = G.creature;
+  const sprite = document.getElementById('home-creature-sprite');
+  if (!c || !sprite) return;
+  SFX.poke();
+  sprite.classList.remove('poke-react');
+  void sprite.offsetWidth; // restart the animation
+  sprite.classList.add('poke-react');
+
+  // Contextual emote: creature tells you what it needs
+  let pool;
+  if      (c.energy < 30)    pool = ['💤', '😪'];
+  else if (c.hunger < 40)    pool = ['🍖', '🤤'];
+  else if (c.hygiene < 40)   pool = ['🧼', '💦'];
+  else if (c.happiness < 40) pool = ['💔', '🥺'];
+  else                       pool = ['💗', '✨', '♪', '😊'];
+  showEmote(sprite, pool[Math.floor(Math.random() * pool.length)]);
+
+  const now = Date.now();
+  if (now - lastPokeReward > 3000) {
+    lastPokeReward = now;
+    c.happiness = Math.min(100, c.happiness + 1);
+    saveGame();
+  }
+}
+
+// Ambient mood: creature emotes about its needs (or contentment) on its own
+function ambientMood() {
+  const c = G.creature;
+  const sprite = document.getElementById('home-creature-sprite');
+  if (!c || !sprite) return;
+  const needs = [];
+  if (c.hunger < 40)    needs.push('🍖');
+  if (c.hygiene < 40)   needs.push('🧼');
+  if (c.energy < 30)    needs.push('💤');
+  if (c.happiness < 40) needs.push('💔');
+  if (needs.length) {
+    showEmote(sprite, needs[Math.floor(Math.random() * needs.length)]);
+  } else if (Math.random() < 0.5) {
+    showEmote(sprite, ['♪', '✨', '😊', '💗'][Math.floor(Math.random() * 4)]);
+  }
+  if (Math.random() < 0.4) {
+    sprite.classList.remove('idle-hop');
+    void sprite.offsetWidth;
+    sprite.classList.add('idle-hop');
+  }
+}
+
+// Evolution celebration overlay (consumes the notification queue)
+function checkEvolutionNotice() {
+  if (!G.creature || !G.notifications || !G.notifications.length) return;
+  const note = G.notifications.shift();
+  if (note.type !== 'evolve') return;
+  const def = CREATURES[G.creature.id];
+  const stageInfo = def.stages[note.stage.id];
+  const overlay = document.createElement('div');
+  overlay.className = 'evolve-overlay';
+  overlay.innerHTML = `
+    <div class="evolve-box">
+      <div class="evolve-title">EVOLUTION!</div>
+      <div class="evolve-sprite" style="filter:drop-shadow(0 0 34px ${def.glow})">
+        ${getSpriteHTML(G.creature.id, note.stage.id, 170)}
+      </div>
+      <div class="evolve-name">${G.creature.name} evolved into<br><b>${stageInfo ? stageInfo.name : note.stage.name}</b>!</div>
+      <button class="btn-primary" style="max-width:220px">Amazing!</button>
+    </div>`;
+  overlay.querySelector('button').addEventListener('click', () => {
+    overlay.remove();
+    if (G.screen === 'home') renderHome();
+  });
+  document.body.appendChild(overlay);
+  SFX.evolve();
+}
+
+function toggleMute(btn) {
+  const muted = SFX.toggleMute();
+  if (btn) btn.textContent = muted ? '🔇' : '🔊';
+  if (!muted) SFX.good();
+}
 
 // ---- Home Screen Render ----
 function renderHome() {
@@ -1165,13 +1314,14 @@ function renderHome() {
       <div class="home-level">
         <span class="level-badge" style="background:linear-gradient(135deg,${def.color},${def.glow})">Lv.${c.level}</span>
         <span class="stage-badge">${stageDef.name}</span>
+        <button class="btn-mute" onclick="toggleMute(this)">${SFX.isMuted() ? '🔇' : '🔊'}</button>
       </div>
     </div>
 
     <div class="creature-stage">
       <div class="creature-aura" style="background:radial-gradient(circle, ${def.glow} 0%, transparent 70%)"></div>
       <div class="creature-main-sprite" id="home-creature-sprite"
-           style="filter:${glowFilter} ${tintFilter}">
+           style="filter:${glowFilter} ${tintFilter}" onclick="pokeCreature()" title="Pet ${c.name}!">
         ${getSpriteHTML(c.id, stageDef.id, Math.min(150, 100 + Math.floor(c.level * 0.5)))}
       </div>
       ${gearBadges ? `<div class="creature-gear-badges">${gearBadges}</div>` : ''}
@@ -1226,66 +1376,73 @@ function renderHome() {
       Evolution tendency: <b>${evPath.charAt(0).toUpperCase() + evPath.slice(1)}</b> path
     </div>
   `;
+
+  checkEvolutionNotice();
 }
 
 function doAction(action) {
   const ok = careAction(action);
-  if (ok !== false) {
-    const sprite = document.getElementById('home-creature-sprite');
-    if (sprite) {
-      sprite.classList.add('care-react');
-      setTimeout(() => sprite.classList.remove('care-react'), 800);
-    }
+  if (ok === false) return;
 
-    // Feed animation: show food flying to creature
-    if (action === 'feed') {
-      const sprite = document.getElementById('home-creature-sprite');
-      if (sprite) {
-        const foods = ['🍖', '🍗', '🥩', '🍎', '🧀'];
-        const food = foods[Math.floor(Math.random() * foods.length)];
-        for (let i = 0; i < 3; i++) {
-          const foodEl = document.createElement('div');
-          foodEl.className = 'flying-food';
-          foodEl.textContent = food;
-          foodEl.style.animationDelay = (i * 0.15) + 's';
-          sprite.appendChild(foodEl);
-          setTimeout(() => foodEl.remove(), 1000);
-        }
-        // Creature bounce
-        sprite.classList.add('creature-eating');
-        setTimeout(() => sprite.classList.remove('creature-eating'), 800);
-      }
-    }
+  // Re-render first so vitals update, then animate on the fresh node —
+  // otherwise the re-render destroys the animation mid-flight.
+  renderHome();
 
-    setTimeout(() => renderHome(), 200);
+  const sprite = document.getElementById('home-creature-sprite');
+  if (sprite) {
+    sprite.classList.add('care-react');
+    setTimeout(() => sprite.classList.remove('care-react'), 800);
+    if (ok && ok.xp) spawnFloatText(sprite, `+${ok.xp} XP`);
+  }
+  if (action === 'feed') SFX.munch();
+  else if (action === 'bathe') SFX.splash();
+  else if (action === 'sleep') SFX.good();
+
+  // Feed animation: show food flying to creature
+  if (action === 'feed' && sprite) {
+    const foods = ['🍖', '🍗', '🥩', '🍎', '🧀'];
+    const food = foods[Math.floor(Math.random() * foods.length)];
+    for (let i = 0; i < 3; i++) {
+      const foodEl = document.createElement('div');
+      foodEl.className = 'flying-food';
+      foodEl.textContent = food;
+      foodEl.style.animationDelay = (i * 0.15) + 's';
+      sprite.appendChild(foodEl);
+      setTimeout(() => foodEl.remove(), 1000);
+    }
+    // Creature bounce
+    sprite.classList.add('creature-eating');
+    setTimeout(() => sprite.classList.remove('creature-eating'), 800);
   }
 }
 
 // ---- Enhanced Bond Action (hearts animation) ----
 function doBondAction() {
   const ok = careAction('bond');
-  if (ok !== false) {
-    const sprite = document.getElementById('home-creature-sprite');
-    if (sprite) {
-      sprite.classList.add('care-react');
-      setTimeout(() => sprite.classList.remove('care-react'), 800);
+  if (ok === false) return;
+  SFX.heart();
+  renderHome();
 
-      // Flying hearts
-      for (let i = 0; i < 6; i++) {
-        const heart = document.createElement('div');
-        heart.className = 'flying-heart';
-        heart.textContent = '💗';
-        heart.style.left = (20 + Math.random() * 60) + '%';
-        heart.style.animationDelay = (i * 0.12) + 's';
-        sprite.appendChild(heart);
-        setTimeout(() => heart.remove(), 1200);
-      }
+  const sprite = document.getElementById('home-creature-sprite');
+  if (sprite) {
+    sprite.classList.add('care-react');
+    setTimeout(() => sprite.classList.remove('care-react'), 800);
+    if (ok && ok.xp) spawnFloatText(sprite, `+${ok.xp} XP`);
 
-      // Pet animation on touch
-      sprite.classList.add('creature-pet');
-      setTimeout(() => sprite.classList.remove('creature-pet'), 600);
+    // Flying hearts
+    for (let i = 0; i < 6; i++) {
+      const heart = document.createElement('div');
+      heart.className = 'flying-heart';
+      heart.textContent = '💗';
+      heart.style.left = (20 + Math.random() * 60) + '%';
+      heart.style.animationDelay = (i * 0.12) + 's';
+      sprite.appendChild(heart);
+      setTimeout(() => heart.remove(), 1200);
     }
-    setTimeout(() => renderHome(), 200);
+
+    // Pet animation on touch
+    sprite.classList.add('creature-pet');
+    setTimeout(() => sprite.classList.remove('creature-pet'), 600);
   }
 }
 
@@ -1363,6 +1520,7 @@ function doPlayAction() {
 
     ball.addEventListener('click', () => {
       clearTimeout(timeout);
+      SFX.pop();
       catches++;
       const countEl = document.getElementById('catch-count');
       if (countEl) countEl.textContent = catches;
@@ -1816,6 +1974,7 @@ function renderBattleScreen() {
       } else {
         showToast(`Victory! +${xpReward} XP!`);
       }
+      SFX.coin();
     } else {
       G.creature.hp = Math.max(1, Math.floor(G.creature.maxHp * 0.1));
       G.creature.recoveryEvents++;
