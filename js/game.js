@@ -342,6 +342,14 @@ function getEggStateMessage(bond) {
   return "Your egg is cold and still...";
 }
 
+// ---- Mini-game session token ----
+// Incremented every time the incubation screen re-renders (including "Give Up"),
+// so any still-running game loop from a previous session knows to stop.
+let incuGameToken = 0;
+function incuGameActive(token) {
+  return token === incuGameToken && G.screen === 'incubation';
+}
+
 // ---- Incubation Mini-Game: Warm the Egg ----
 function startWarmGame() {
   const incu = G.incubation;
@@ -349,6 +357,7 @@ function startWarmGame() {
 
   const el = document.getElementById('incubation-content');
   if (!el) return;
+  const token = ++incuGameToken;
 
   el.innerHTML = `
     <div class="mini-game warm-game">
@@ -385,7 +394,7 @@ function startWarmGame() {
   heatBtn.addEventListener('touchstart', (e) => { e.preventDefault(); if (!gameOver) temp = Math.min(100, temp + 8); });
 
   const gameLoop = setInterval(() => {
-    if (gameOver || G.screen !== 'incubation') { clearInterval(gameLoop); return; }
+    if (gameOver || !incuGameActive(token)) { clearInterval(gameLoop); return; }
 
     // Temperature drifts down naturally
     temp = Math.max(0, temp - 1.5);
@@ -440,6 +449,7 @@ function startRockGame() {
 
   const el = document.getElementById('incubation-content');
   if (!el) return;
+  const token = ++incuGameToken;
 
   el.innerHTML = `
     <div class="mini-game rock-game">
@@ -484,7 +494,7 @@ function startRockGame() {
 
   // Needle swings back and forth - press at the right time!
   const needleLoop = setInterval(() => {
-    if (gameOver || G.screen !== 'incubation') { clearInterval(needleLoop); return; }
+    if (gameOver || !incuGameActive(token)) { clearInterval(needleLoop); return; }
     needlePos += needleDir * 2.5;
     if (needlePos >= 100) { needlePos = 100; needleDir = -1; }
     if (needlePos <= 0) { needlePos = 0; needleDir = 1; }
@@ -555,6 +565,7 @@ function startSingGame() {
 
   const el = document.getElementById('incubation-content');
   if (!el) return;
+  const token = ++incuGameToken;
 
   const colors = [
     { name: 'red', bg: '#ef4444', glow: '#fca5a5' },
@@ -608,7 +619,7 @@ function startSingGame() {
     if (msgEl) msgEl.textContent = 'Watch carefully...';
     await new Promise(r => setTimeout(r, 600));
     for (let i = 0; i < sequence.length; i++) {
-      if (G.screen !== 'incubation') return;
+      if (!incuGameActive(token)) return;
       await flashButton(sequence[i]);
     }
     accepting = true;
@@ -617,6 +628,7 @@ function startSingGame() {
   }
 
   function nextRound() {
+    if (!incuGameActive(token)) return;
     roundNum++;
     if (roundNum > maxRounds) {
       // Game complete
@@ -630,6 +642,7 @@ function startSingGame() {
   }
 
   function finishSingGame() {
+    if (!incuGameActive(token)) return;
     incu.bond = Math.min(BOND_THRESHOLD + 10, incu.bond + totalBond);
     incu.stats.energy = Math.min(100, incu.stats.energy + totalBond);
     incu.crackStage = Math.floor(incu.bond / 25);
@@ -680,6 +693,7 @@ function startShieldGame() {
 
   const el = document.getElementById('incubation-content');
   if (!el) return;
+  const token = ++incuGameToken;
 
   el.innerHTML = `
     <div class="mini-game shield-game">
@@ -714,7 +728,7 @@ function startShieldGame() {
   const threatEmoji = { wind: '💨', rain: '🌧️', bug: '🕷️' };
 
   function spawnThreat() {
-    if (gameOver || G.screen !== 'incubation') return;
+    if (gameOver || !incuGameActive(token)) return;
 
     const type = threats[Math.floor(Math.random() * threats.length)];
     const threat = document.createElement('div');
@@ -772,7 +786,7 @@ function startShieldGame() {
     });
 
     const moveLoop = setInterval(() => {
-      if (!alive || gameOver || G.screen !== 'incubation') {
+      if (!alive || gameOver || !incuGameActive(token)) {
         clearInterval(moveLoop);
         if (threat.parentNode) threat.remove();
         return;
@@ -799,13 +813,13 @@ function startShieldGame() {
 
   // Spawn threats periodically
   spawnInterval = setInterval(() => {
-    if (gameOver || G.screen !== 'incubation') { clearInterval(spawnInterval); return; }
+    if (gameOver || !incuGameActive(token)) { clearInterval(spawnInterval); return; }
     spawnThreat();
   }, 800 + Math.random() * 400);
 
   // Timer countdown
   const timerLoop = setInterval(() => {
-    if (gameOver || G.screen !== 'incubation') { clearInterval(timerLoop); return; }
+    if (gameOver || !incuGameActive(token)) { clearInterval(timerLoop); return; }
     timeLeft -= 0.1;
     if (timeEl) timeEl.textContent = Math.ceil(timeLeft);
     if (timeLeft <= 0) {
@@ -825,7 +839,7 @@ function startShieldGame() {
 
   window.endShieldGame = function(gaveUp) {
     if (window._shieldGameCleanup) window._shieldGameCleanup();
-    if (gaveUp) {
+    if (gaveUp || !incuGameActive(token)) {
       renderIncubation();
       return;
     }
@@ -846,6 +860,7 @@ function startShieldGame() {
 
 // ---- Incubation Render (Bond-based, mini-game driven) ----
 function renderIncubation() {
+  incuGameToken++; // invalidate any mini-game loop still running (e.g. after Give Up)
   const incu = G.incubation;
   if (!incu) return;
   const def = CREATURES[incu.creatureId];
@@ -1033,7 +1048,8 @@ const SCREENS = {
   },
 
   hatching() {
-    const bonuses = hatchEgg();
+    if (!G.incubation && !G.creature) { showScreen('title'); return; }
+    const bonuses = hatchEgg() || G.creature.incubationBonuses || [];
     const def = CREATURES[G.creature.id];
     const container = document.getElementById('hatch-container');
     if (container) {
@@ -1051,10 +1067,11 @@ const SCREENS = {
           <div class="hatch-name">${G.creature.name}</div>
           <div class="hatch-subtitle">A ${def.stages.baby.name} hatched!</div>
         </div>
+        ${bonuses.length ? `
         <div class="hatch-bonuses hidden" id="hatch-bonuses">
-          ${bonuses.length ? '<div class="bonus-title">Incubation Bonuses!</div>' : ''}
+          <div class="bonus-title">Incubation Bonuses!</div>
           ${bonuses.map(b => `<div class="bonus-item"><b>${b.name}</b> - ${b.effect}</div>`).join('')}
-        </div>
+        </div>` : ''}
       `;
     }
     setTimeout(() => {

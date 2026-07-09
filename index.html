@@ -6,11 +6,15 @@
   <meta name="theme-color" content="#06060f">
   <meta name="description" content="Hatch-Bound: Beast Arena — Raise and battle super-animal creatures in real time.">
   <title>HatchBound: Beast Arena</title>
+  <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🥚</text></svg>">
   <link rel="stylesheet" href="css/main.css">
 </head>
 <body>
 <div id="app">
 
+  <!-- ====================================================
+       TITLE SCREEN
+       ==================================================== -->
   <div id="screen-title" class="screen">
     <canvas id="title-particles"></canvas>
     <div class="title-content">
@@ -31,12 +35,18 @@
     </div>
   </div>
 
+  <!-- ====================================================
+       CHOOSE CATEGORY
+       ==================================================== -->
   <div id="screen-choose-category" class="screen">
     <div class="cat-screen-title">Choose Your Bloodline</div>
     <p class="cat-screen-sub">Your creature's core power comes from its ancient lineage.</p>
     <div id="category-grid"></div>
   </div>
 
+  <!-- ====================================================
+       CHOOSE CREATURE
+       ==================================================== -->
   <div id="screen-choose-creature" class="screen">
     <div class="screen-header">
       <button class="btn-back" onclick="showScreen('choose-category')">← Back</button>
@@ -47,6 +57,9 @@
     </div>
   </div>
 
+  <!-- ====================================================
+       NAME CREATURE
+       ==================================================== -->
   <div id="screen-name-creature" class="screen">
     <div class="screen-header" style="justify-content:center">
       <h2>Name Your Egg</h2>
@@ -63,12 +76,18 @@
     </div>
   </div>
 
+  <!-- ====================================================
+       INCUBATION
+       ==================================================== -->
   <div id="screen-incubation" class="screen">
     <div class="scroll-area">
       <div id="incubation-content"></div>
     </div>
   </div>
 
+  <!-- ====================================================
+       HATCHING
+       ==================================================== -->
   <div id="screen-hatching" class="screen">
     <div id="hatch-container"></div>
     <div style="padding:0 24px 32px;width:100%;max-width:400px;margin:0 auto">
@@ -78,60 +97,88 @@
     </div>
   </div>
 
+  <!-- ====================================================
+       HOME
+       ==================================================== -->
   <div id="screen-home" class="screen">
     <div class="scroll-area">
       <div id="home-content"></div>
     </div>
   </div>
 
+  <!-- ====================================================
+       TRAINING
+       ==================================================== -->
   <div id="screen-train" class="screen">
     <div class="scroll-area">
       <div id="train-content"></div>
     </div>
   </div>
 
+  <!-- ====================================================
+       BATTLE PREPARATION
+       ==================================================== -->
   <div id="screen-battle-prep" class="screen">
     <div class="scroll-area">
       <div id="battle-prep-content"></div>
     </div>
   </div>
 
+  <!-- ====================================================
+       BATTLE
+       ==================================================== -->
   <div id="screen-battle" class="screen">
     <div id="battle-content"></div>
   </div>
 
+  <!-- ====================================================
+       BATTLE RESULT
+       ==================================================== -->
   <div id="screen-battle-result" class="screen">
     <div id="battle-result-content"></div>
   </div>
 
+  <!-- ====================================================
+       PROFILE
+       ==================================================== -->
   <div id="screen-profile" class="screen">
     <div class="scroll-area">
       <div id="profile-content"></div>
     </div>
   </div>
 
+  <!-- ====================================================
+       COLLECTION
+       ==================================================== -->
   <div id="screen-collection" class="screen">
     <div class="scroll-area">
       <div id="collection-content"></div>
     </div>
   </div>
 
+  <!-- ====================================================
+       GEAR / EQUIPMENT
+       ==================================================== -->
   <div id="screen-gear" class="screen">
     <div class="scroll-area">
       <div id="gear-content"></div>
     </div>
   </div>
 
-</div>
+</div><!-- /app -->
 
+<!-- Global toast notification -->
 <div id="toast"></div>
 
+<!-- Game scripts (order matters) -->
 <script src="js/data.js"></script>
 <script src="js/sprites.js"></script>
 <script src="js/battle.js"></script>
 <script src="js/game.js"></script>
 
+<!-- Hatch screen post-hatch button timing -->
 <script>
+  // Show "meet your beast" button a bit after hatching
   document.addEventListener('DOMContentLoaded', () => {
     const orig = window.showScreen;
     window.showScreen = function(id, data) {

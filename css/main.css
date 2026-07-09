@@ -2021,136 +2021,139 @@ html, body {
   50%     { box-shadow: 0 6px 50px rgba(212,144,32,0.8), 0 0 60px rgba(245,158,11,0.4); }
 }
 
-/* ---- Warmth Mini-Game ---- */
-.warmth-game { padding: 16px; }
-.warmth-gauge-container {
+/* ---- Shared mini-game subtitle ---- */
+.mg-subtitle {
+  font-size: 0.8rem;
+  color: var(--text-dim);
+  margin-bottom: 12px;
+}
+
+/* ---- Warm Mini-Game (vertical temperature gauge) ---- */
+.warm-gauge-container {
+  display: flex;
+  justify-content: center;
+  margin: 12px auto 16px;
+}
+.warm-gauge-bg {
   position: relative;
   height: 200px;
-  width: 50px;
-  margin: 0 auto 16px;
+  width: 90px;
   background: rgba(255,255,255,0.06);
   border: 2px solid var(--border);
-  border-radius: 25px;
+  border-radius: 16px;
   overflow: hidden;
 }
-.warmth-zone {
+.warm-zone {
   position: absolute;
   left: 0; right: 0;
-  background: rgba(74,158,96,0.25);
-  border-top: 2px dashed rgba(74,158,96,0.5);
-  border-bottom: 2px dashed rgba(74,158,96,0.5);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 0.6rem;
+  font-weight: 800;
+  letter-spacing: 1px;
+  pointer-events: none;
 }
-.warmth-indicator {
+/* Temp scale: 0 = bottom. Sweet spot is 35-65 (matches JS). */
+.warm-hot   { top: 0;      height: 35%; background: rgba(200,48,48,0.14);  color: rgba(255,140,120,0.7); }
+.warm-sweet { top: 35%;    height: 30%; background: rgba(74,158,96,0.22);  color: rgba(140,230,170,0.9);
+              border-top: 2px dashed rgba(74,158,96,0.5); border-bottom: 2px dashed rgba(74,158,96,0.5); }
+.warm-cold  { bottom: 0;   height: 35%; background: rgba(80,140,220,0.12); color: rgba(140,180,255,0.7); }
+.warm-indicator {
   position: absolute;
-  left: -4px; right: -4px;
+  left: 2px; right: 2px;
   height: 6px;
   background: var(--gold);
   border-radius: 3px;
-  box-shadow: 0 0 10px rgba(212,144,32,0.6);
+  box-shadow: 0 0 10px rgba(212,144,32,0.7);
   transition: bottom 0.1s linear;
+  z-index: 1;
 }
-.warmth-btn {
-  width: 80px;
-  height: 80px;
-  border-radius: 50%;
-  border: 3px solid var(--orange);
-  background: rgba(249,115,22,0.15);
-  color: var(--orange);
-  font-size: 1.5rem;
-  font-weight: 900;
-  cursor: pointer;
-  display: block;
+.warm-heat-btn {
+  max-width: 200px;
   margin: 0 auto;
-  transition: all 0.1s;
-}
-.warmth-btn:active {
-  background: rgba(249,115,22,0.35);
-  transform: scale(0.95);
-  box-shadow: 0 0 20px rgba(249,115,22,0.4);
+  display: block;
+  user-select: none;
+  -webkit-user-select: none;
 }
 
-/* ---- Rock Mini-Game ---- */
-.rock-game { padding: 16px; }
-.rock-indicator {
-  height: 60px;
+/* ---- Rock Mini-Game (rhythm needle) ---- */
+.rock-visual { margin: 12px 0 16px; }
+.rock-indicator-track {
+  height: 44px;
   position: relative;
   background: rgba(255,255,255,0.04);
   border: 1px solid var(--border);
   border-radius: var(--radius-sm);
-  margin-bottom: 16px;
+  margin-bottom: 14px;
   overflow: hidden;
 }
-.rock-zone {
+/* Perfect timing window is needle 35-65 (matches JS) */
+.rock-indicator-zone {
   position: absolute;
   top: 0; bottom: 0;
-  width: 40%;
-  left: 30%;
-  background: rgba(74,158,96,0.15);
-  border-left: 2px dashed rgba(74,158,96,0.4);
-  border-right: 2px dashed rgba(74,158,96,0.4);
+  left: 35%;
+  width: 30%;
+  background: rgba(74,158,96,0.18);
+  border-left: 2px dashed rgba(74,158,96,0.45);
+  border-right: 2px dashed rgba(74,158,96,0.45);
 }
-.rock-needle {
+.rock-indicator-needle {
   position: absolute;
   top: 4px; bottom: 4px;
   width: 4px;
+  margin-left: -2px;
   background: var(--gold);
   border-radius: 2px;
-  box-shadow: 0 0 8px rgba(212,144,32,0.5);
-  transition: left 0.08s linear;
+  box-shadow: 0 0 8px rgba(212,144,32,0.6);
+  transition: left 0.05s linear;
 }
-.rock-btns {
+.rock-egg-display {
+  display: flex;
+  justify-content: center;
+  transition: transform 0.25s ease;
+}
+.rock-buttons {
   display: flex;
   gap: 12px;
   justify-content: center;
+  margin-top: 8px;
 }
 .rock-btn {
-  width: 80px;
-  height: 60px;
-  border-radius: var(--radius-sm);
-  border: 2px solid var(--border);
-  background: var(--bg-card);
-  color: var(--text);
-  font-size: 1.5rem;
-  cursor: pointer;
-  transition: all 0.1s;
+  width: 110px;
+  padding: 14px 0;
 }
-.rock-btn:active, .rock-btn.rock-flash {
-  background: rgba(212,144,32,0.2);
-  border-color: var(--gold);
-  transform: scale(0.95);
+.rock-btn.rock-active {
+  transform: scale(0.94);
+  box-shadow: 0 0 20px rgba(212,144,32,0.6);
 }
 
-/* ---- Sing Mini-Game ---- */
-.sing-game { padding: 16px; }
-.sing-buttons {
+/* ---- Sing Mini-Game (Simon Says) ---- */
+.simon-grid {
   display: grid;
   grid-template-columns: 1fr 1fr;
-  gap: 10px;
+  gap: 12px;
   max-width: 240px;
-  margin: 0 auto;
+  margin: 12px auto 16px;
 }
-.sing-btn {
-  height: 70px;
+.simon-btn {
+  height: 80px;
   border-radius: var(--radius);
-  border: 2px solid;
+  border: 2px solid rgba(255,255,255,0.15);
   cursor: pointer;
-  font-size: 1.5rem;
+  opacity: 0.45;
   transition: all 0.15s;
-  opacity: 0.6;
+  filter: saturate(0.8);
 }
-.sing-btn:active, .sing-btn.sing-lit {
+.simon-btn.simon-active {
   opacity: 1;
-  transform: scale(1.05);
-  box-shadow: 0 0 20px currentColor;
-}
-.sing-btn.sing-flash { animation: sing-flash 0.4s ease; }
-@keyframes sing-flash {
-  0%   { opacity: 1; transform: scale(1.1); }
-  100% { opacity: 0.6; transform: scale(1); }
+  transform: scale(1.06);
+  filter: saturate(1.4) brightness(1.3);
+  box-shadow: 0 0 24px var(--glow-color, #fff);
+  border-color: var(--glow-color, #fff);
 }
 
 /* ---- Shield Mini-Game ---- */
-.shield-game { padding: 16px; }
 .shield-arena {
   position: relative;
   height: 260px;
@@ -2158,47 +2161,156 @@ html, body {
   border: 1px solid var(--border);
   border-radius: var(--radius);
   overflow: hidden;
-  margin-bottom: 12px;
+  margin: 12px 0;
 }
-.shield-egg {
+.shield-egg-center {
   position: absolute;
   top: 50%;
   left: 50%;
   transform: translate(-50%, -50%);
-  font-size: 3rem;
   z-index: 1;
+  filter: drop-shadow(0 0 12px rgba(212,144,32,0.4));
 }
 .shield-threat {
   position: absolute;
-  font-size: 1.8rem;
+  width: 30px;
+  height: 30px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 1.7rem;
   cursor: pointer;
-  transition: transform 0.05s;
   user-select: none;
   z-index: 2;
   animation: threat-glow 0.6s ease-in-out infinite alternate;
 }
-.shield-threat:hover { transform: scale(1.3); }
 @keyframes threat-glow {
   from { filter: drop-shadow(0 0 4px rgba(255,100,100,0.4)); }
   to   { filter: drop-shadow(0 0 8px rgba(255,100,100,0.7)); }
 }
-
-/* ---- Shared Mini-Game Overrides for Incubation ---- */
-.incu-minigame-area {
-  background: var(--bg-card);
-  border: 1px solid var(--border);
-  border-radius: var(--radius);
-  padding: 16px;
-  text-align: center;
+.shield-threat.threat-blocked {
+  animation: threat-blocked-pop 0.3s ease forwards;
+  pointer-events: none;
 }
-.incu-minigame-area .mg-title {
-  font-size: 1rem;
-  font-weight: 800;
-  color: var(--gold);
+@keyframes threat-blocked-pop {
+  0%   { transform: scale(1);   opacity: 1; filter: brightness(2); }
+  100% { transform: scale(1.8); opacity: 0; }
+}
+.shield-threat.threat-hit {
+  animation: threat-hit-flash 0.3s ease forwards;
+  pointer-events: none;
+}
+@keyframes threat-hit-flash {
+  0%   { transform: scale(1);   opacity: 1; filter: drop-shadow(0 0 12px rgba(255,40,40,1)); }
+  100% { transform: scale(0.3); opacity: 0; }
+}
+
+/* =====================================================
+   HOME — Care action animations
+   ===================================================== */
+.flying-food {
+  position: absolute;
+  bottom: -10px;
+  left: 50%;
+  font-size: 1.4rem;
+  pointer-events: none;
+  z-index: 3;
+  animation: food-fly 0.9s ease-in forwards;
+}
+@keyframes food-fly {
+  0%   { transform: translate(-50%, 40px) scale(0.6); opacity: 0; }
+  30%  { transform: translate(-50%, 10px) scale(1);   opacity: 1; }
+  80%  { transform: translate(-50%, -50px) scale(0.9); opacity: 1; }
+  100% { transform: translate(-50%, -70px) scale(0.4); opacity: 0; }
+}
+.flying-heart {
+  position: absolute;
+  bottom: 20%;
+  font-size: 1.3rem;
+  pointer-events: none;
+  z-index: 3;
+  animation: heart-float 1.2s ease-out forwards;
+}
+@keyframes heart-float {
+  0%   { transform: translateY(0) scale(0.5);     opacity: 0; }
+  20%  { transform: translateY(-14px) scale(1.1); opacity: 1; }
+  100% { transform: translateY(-90px) scale(0.8); opacity: 0; }
+}
+.creature-eating { animation: creature-chomp 0.8s ease !important; }
+@keyframes creature-chomp {
+  0%,100% { transform: scale(1); }
+  25% { transform: scale(1.06) translateY(2px); }
+  50% { transform: scale(0.97) translateY(-2px); }
+  75% { transform: scale(1.04) translateY(1px); }
+}
+.creature-pet { animation: creature-pet-wiggle 0.6s ease !important; }
+@keyframes creature-pet-wiggle {
+  0%,100% { transform: rotate(0); }
+  25% { transform: rotate(-4deg) scale(1.04); }
+  75% { transform: rotate(4deg)  scale(1.04); }
+}
+
+/* ---- Play: Catch the Ball overlay ---- */
+.play-catch-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 200;
+  background: rgba(10,7,3,0.85);
+  backdrop-filter: blur(4px);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 20px;
+  animation: fadeIn 0.25s ease;
+}
+.catch-game {
+  width: 100%;
+  max-width: 380px;
+  background: var(--bg-surface);
+  border: 1px solid var(--border-h);
+  border-radius: var(--radius);
+  padding: 18px;
+  text-align: center;
+  box-shadow: var(--shadow);
+}
+.catch-title { font-size: 1.1rem; font-weight: 800; color: var(--gold); margin-bottom: 4px; }
+.catch-score { font-size: 0.85rem; color: var(--text-dim); margin-bottom: 10px; }
+.catch-arena {
+  position: relative;
+  height: 240px;
+  background: rgba(255,255,255,0.03);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  overflow: hidden;
   margin-bottom: 10px;
 }
-.incu-minigame-area .mg-score {
-  font-size: 0.85rem;
-  color: var(--text-dim);
-  margin-bottom: 12px;
+.catch-ball {
+  position: absolute;
+  font-size: 2.2rem;
+  cursor: pointer;
+  user-select: none;
+  animation: ball-spawn 0.15s ease-out;
+  transition: transform 0.1s;
 }
+.catch-ball:hover { transform: scale(1.15); }
+@keyframes ball-spawn {
+  from { transform: scale(0) rotate(-120deg); }
+  to   { transform: scale(1) rotate(0); }
+}
+.catch-ball.ball-caught {
+  animation: ball-caught-pop 0.3s ease forwards;
+  pointer-events: none;
+}
+@keyframes ball-caught-pop {
+  0%   { transform: scale(1);   opacity: 1; filter: brightness(1.8); }
+  100% { transform: scale(1.7); opacity: 0; }
+}
+.catch-ball.ball-miss {
+  animation: ball-miss-drop 0.3s ease forwards;
+  pointer-events: none;
+}
+@keyframes ball-miss-drop {
+  0%   { transform: translateY(0);    opacity: 1; }
+  100% { transform: translateY(30px); opacity: 0; }
+}
+.catch-msg { font-size: 0.85rem; color: var(--text); min-height: 20px; }
