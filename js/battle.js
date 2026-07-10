@@ -9,6 +9,7 @@ const Battle = (() => {
   let animQueue = [];
   let running = false;
 
+  // ---- Build combat stats from creature save ----
   function buildCombatant(creature, isPlayer) {
     const def = CREATURES[creature.id];
     const pers = PERSONALITIES[creature.personality || def.personality];
@@ -22,6 +23,38 @@ const Battle = (() => {
 
     const careBonus = isPlayer ? Math.min(20, Math.floor((creature.trainingCount || 0) / 5)) : 0;
 
+    // Nature/IV rolls (unique per hatched creature)
+    if (creature.ivs) {
+      hp   = Math.floor(hp   * (creature.ivs.hp  || 1));
+      atk  = Math.floor(atk  * (creature.ivs.atk || 1));
+      def_ = Math.floor(def_ * (creature.ivs.def || 1));
+      spd  = Math.floor(spd  * (creature.ivs.spd || 1));
+    }
+    if (creature.nature && typeof NATURES !== 'undefined' && NATURES[creature.nature]) {
+      const n = NATURES[creature.nature].mods;
+      hp   = Math.floor(hp   * (n.hp  || 1));
+      atk  = Math.floor(atk  * (n.atk || 1));
+      def_ = Math.floor(def_ * (n.def || 1));
+      spd  = Math.floor(spd  * (n.spd || 1));
+    }
+
+    // Trained stats: earned in the Training Center, flat additions
+    if (isPlayer && creature.trainedStats) {
+      hp   += (creature.trainedStats.hp  || 0) * 2;
+      atk  += creature.trainedStats.atk || 0;
+      def_ += creature.trainedStats.def || 0;
+      spd  += creature.trainedStats.spd || 0;
+    }
+
+    // Campaign modifiers: AI stat multipliers, player HP handicap
+    if (!isPlayer && creature.statMods) {
+      hp   = Math.floor(hp   * (creature.statMods.hp  || 1));
+      atk  = Math.floor(atk  * (creature.statMods.atk || 1));
+      def_ = Math.floor(def_ * (creature.statMods.def || 1));
+      spd  = Math.floor(spd  * (creature.statMods.spd || 1));
+    }
+
+    // Apply gear bonuses for player
     if (isPlayer && creature.equippedGear && typeof GEAR !== 'undefined') {
       ['weapon', 'armor', 'trinket'].forEach(slot => {
         const gearId = creature.equippedGear[slot];
@@ -35,6 +68,9 @@ const Battle = (() => {
       });
     }
 
+    const startHp = isPlayer && state.mods && state.mods.playerHpPct
+      ? Math.max(1, Math.floor(hp * state.mods.playerHpPct)) : hp;
+
     return {
       id:        creature.id,
       name:      creature.name,
@@ -43,7 +79,7 @@ const Battle = (() => {
       color:     def.color,
       glow:      def.glow,
       maxHp:     hp,
-      hp:        hp,
+      hp:        startHp,
       atk:       atk + careBonus,
       def:       def_,
       spd:       spd,
@@ -61,7 +97,8 @@ const Battle = (() => {
   }
 
   function buildAIMoves(def) {
-    return def.moves.slice(0, 3);
+    const pool = def.moves.slice();
+    return pool.slice(0, 3);
   }
 
   function pickAIStance() {
@@ -69,6 +106,7 @@ const Battle = (() => {
     return stances[Math.floor(Math.random() * stances.length)];
   }
 
+  // ---- Damage formula (Pokémon-style balanced) ----
   function calcDamage(attacker, defender, moveId) {
     const move = MOVES[moveId];
     if (!move || move.power === 0) return 0;
@@ -77,15 +115,19 @@ const Battle = (() => {
     let atkStat = attacker.atk * (1 + attacker.buffAtk * 0.15);
     let defStat = defender.def * (1 + defender.buffDef * 0.15);
 
+    // Stance modifier
     if (attacker.stance === 'aggressive') atkStat *= 1.15;
     if (attacker.stance === 'defensive')  atkStat *= 0.88;
     if (defender.stance === 'defensive')  defStat *= 1.15;
     if (defender.stance === 'aggressive') defStat *= 0.88;
 
+    // Berserker
     if (attacker.isBerserk) atkStat *= 1.3;
 
+    // Element
     const elemMult = calcElementDamage(move.element, defender.element);
 
+    // Balanced formula: ensures 4-8 hit range across level bands
     const level = Math.min(100, attacker.level || 1);
     const rawDmg = ((2 * level / 5 + 2) * base * atkStat / defStat / 50 + 2);
     let dmg = Math.floor(rawDmg * elemMult * (0.85 + Math.random() * 0.3));
@@ -94,6 +136,7 @@ const Battle = (() => {
     return { dmg, elemMult };
   }
 
+  // ---- Apply effect ----
   function applyEffect(target, effect) {
     const effects = { poison:true, burn:true, stun:true, sleep:true, confuse:true, slow:true };
     if (!effects[effect]) return null;
@@ -124,6 +167,7 @@ const Battle = (() => {
     return null;
   }
 
+  // ---- Tick status effects ----
   function tickStatus(combatant) {
     const msgs = [];
     combatant.statusEffects = combatant.statusEffects.filter(s => {
@@ -141,13 +185,16 @@ const Battle = (() => {
     return combatant.statusEffects.some(s => s.type === type);
   }
 
+  // ---- One turn of combat ----
   function executeTurn(attacker, defender, attackerMove, round) {
     const events = [];
 
+    // Status tick
     const tickMsgs = tickStatus(attacker);
     events.push(...tickMsgs);
     if (attacker.hp <= 0) return events;
 
+    // Stun / sleep check
     if (hasStatus(attacker, 'stun')) {
       events.push({ text:`${attacker.name} is stunned and cannot move!`, type:'stun' });
       return events;
@@ -157,6 +204,7 @@ const Battle = (() => {
       return events;
     }
 
+    // Confusion: 30% self-hit chance
     if (hasStatus(attacker, 'confuse') && Math.random() < 0.3) {
       const selfDmg = Math.floor(attacker.maxHp * 0.08);
       attacker.hp = Math.max(0, attacker.hp - selfDmg);
@@ -170,11 +218,13 @@ const Battle = (() => {
     events.push({ text:`${attacker.name} used ${move.name}!`, type:'move', move: attackerMove, attacker: attacker.id });
 
     if (move.power === 0) {
+      // Buff / status-only move
       const buffMsg = applyBuff(attacker, move.effect);
       if (buffMsg) events.push({ text:`${attacker.name}'s ${buffMsg}`, type:'buff' });
       return events;
     }
 
+    // Evasion check
     const evasionFactor = defender.buffEvade * 0.12;
     if (Math.random() < evasionFactor) {
       events.push({ text:`${defender.name} evaded the attack!`, type:'evade' });
@@ -185,6 +235,7 @@ const Battle = (() => {
 
     let actualDmg = dmg;
 
+    // Item: bandage (auto use when low)
     if (!attacker.itemUsed && attacker.item === 'bandage' && attacker.hp < attacker.maxHp * 0.35) {
       const heal = Math.floor(attacker.maxHp * 0.3);
       attacker.hp = Math.min(attacker.maxHp, attacker.hp + heal);
@@ -192,15 +243,17 @@ const Battle = (() => {
       events.push({ text:`${attacker.name} used Bandage! Restored ${heal} HP!`, type:'item' });
     }
 
+    // Item: focus berry (first attack bonus)
     if (!attacker.itemUsed && attacker.item === 'focus_berry' && round === 1) {
       actualDmg = Math.floor(actualDmg * 1.25);
       attacker.itemUsed = true;
       events.push({ text:`${attacker.name} used Focus Berry! Attack boosted!`, type:'item' });
     }
 
+    // Multi-hit
     let hitCount = 1;
     if (move.effect === 'multi') {
-      hitCount = 2 + Math.floor(Math.random() * 2);
+      hitCount = 2 + Math.floor(Math.random() * 2); // 2-3 hits
     }
 
     let totalDmg = 0;
@@ -214,12 +267,14 @@ const Battle = (() => {
     const hitStr  = hitCount > 1 ? ` (${hitCount} hits!)` : '';
     events.push({ text:`${elemStr}${defender.name} took ${totalDmg} damage!${hitStr}`, type:'damage', dmg: totalDmg, target: defender.id, elemMult });
 
+    // Drain
     if (move.effect === 'drain') {
       const heal = Math.floor(totalDmg * 0.4);
       attacker.hp = Math.min(attacker.maxHp, attacker.hp + heal);
       events.push({ text:`${attacker.name} absorbed ${heal} HP!`, type:'drain' });
     }
 
+    // Effect
     if (move.effect && move.effect !== 'none' && move.effect !== 'drain' && move.effect !== 'multi' && move.power > 0) {
       if (Math.random() < 0.6) {
         const applied = applyEffect(defender, move.effect);
@@ -233,6 +288,7 @@ const Battle = (() => {
     return events;
   }
 
+  // ---- Full battle simulation ----
   function simulateBattle(player, opponent) {
     const rounds = [];
     let round = 0;
@@ -242,6 +298,7 @@ const Battle = (() => {
       round++;
       const roundEvents = [];
 
+      // Determine attack order by speed
       const pMove = player.moves[round % player.moves.length];
       const oMove = opponent.moves[round % opponent.moves.length];
 
@@ -269,10 +326,12 @@ const Battle = (() => {
       rounds,
       winner: player.hp > 0 ? 'player' : 'opponent',
       playerHpLeft: player.hp,
+      playerMaxHp: player.maxHp,
       opponentHpLeft: opponent.hp
     };
   }
 
+  // ---- Render helpers ----
   function hpPercent(hp, max) { return Math.max(0, Math.min(100, (hp / max) * 100)); }
 
   function hpColor(pct) {
@@ -288,6 +347,7 @@ const Battle = (() => {
     }).join('');
   }
 
+  // ---- Visual effect helpers ----
   function showMoveBanner(moveName, color) {
     const banner = document.getElementById('battle-move-banner');
     if (!banner) return;
@@ -295,7 +355,7 @@ const Battle = (() => {
     banner.style.color = color || '#fff';
     banner.style.setProperty('--banner-color', color || '#fff');
     banner.classList.remove('hidden', 'banner-show');
-    void banner.offsetWidth;
+    void banner.offsetWidth; // force reflow
     banner.classList.add('banner-show');
     setTimeout(() => banner.classList.add('hidden'), 1200);
   }
@@ -324,10 +384,12 @@ const Battle = (() => {
     setTimeout(() => num.remove(), 1100);
   }
 
+  // ---- DOM playback ----
   async function playBattle(result, playerC, opponentC) {
     for (const round of result.rounds) {
       for (const ev of round.events) {
 
+        // Visual effects fire BEFORE the log entry
         if (ev.type === 'move') {
           const move = MOVES[ev.move];
           if (move && ELEMENTS[move.element]) {
@@ -338,10 +400,18 @@ const Battle = (() => {
             src.classList.add('attack-lunge');
             setTimeout(() => src.classList.remove('attack-lunge'), 500);
           }
-          if (move) spawnAttackEffect(move.element, ev.attacker === playerC.id ? 'opp' : 'player');
+          if (move) {
+            spawnAttackEffect(move.element, ev.attacker === playerC.id ? 'opp' : 'player');
+            if (move.power > 0) SFX.attack(move.element);
+          }
         }
 
+        if (ev.type === 'evade') SFX.evadeSwish();
+        if (ev.type === 'buff') SFX.powerUp();
+        if (ev.type === 'status') SFX.debuff();
+
         if (ev.type === 'damage') {
+          SFX.impact(ev.elemMult || 1);
           const target = ev.target === opponentC.id ? p2Sprite : p1Sprite;
           if (target) {
             target.classList.add('hit-shake');
@@ -353,6 +423,7 @@ const Battle = (() => {
         await addLog(ev);
         await sleep(600);
 
+        // Update HP bars after log
         const p1Pct = hpPercent(round.playerHp, playerC.maxHp);
         const p2Pct = hpPercent(round.opponentHp, opponentC.maxHp);
 
@@ -397,9 +468,10 @@ const Battle = (() => {
 
   function sleep(ms) { return new Promise(r => setTimeout(r, ms)); }
 
+  // ---- Public API ----
   return {
-    init(selectedMoves, stance, selectedItem) {
-      state = { selectedMoves, stance, selectedItem };
+    init(selectedMoves, stance, selectedItem, mods) {
+      state = { selectedMoves, stance, selectedItem, mods: mods || null };
     },
 
     setElements(log, hp1Bar, hp1Num, hp2Bar, hp2Num, spr1, spr2) {
@@ -415,11 +487,13 @@ const Battle = (() => {
     async run(playerCreature, opponentData) {
       const player   = buildCombatant(playerCreature, true);
       const opponent = buildCombatant(opponentData,   false);
+      SFX.battleStart();
       const result   = simulateBattle(player, opponent);
       await playBattle(result, player, opponent);
       return result;
     },
 
+    // Quick sim (no animation) for stat purposes
     quickSim(playerCreature, opponentData) {
       const player   = buildCombatant(playerCreature, true);
       const opponent = buildCombatant(opponentData,   false);

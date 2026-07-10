@@ -19,6 +19,9 @@ let G = {
   battleResult: null,
   coins: 100,
   collection: [],
+  campaign: { progress: 1, stars: {} },
+  battleMode: null,
+  daily: { last: null, streak: 0 },
   inventory: ['basic_meat','basic_meat','sweet_fruit','bandage','focus_berry'],
   notifications: [],
   careActionCooldown: {}
@@ -27,13 +30,18 @@ let G = {
 // ---- Creature Template ----
 function createCreature(id, name) {
   const def = CREATURES[id];
+  const persKeys = Object.keys(PERSONALITIES);
   return {
     id,
     name,
     level: 1,
     xp: 0,
     stage: 'baby',
-    personality: def.personality,
+    // Random personality + nature + IVs: every hatch plays differently
+    personality: persKeys[Math.floor(Math.random() * persKeys.length)],
+    nature: rollNature(),
+    ivs: rollIVs(),
+    trainedStats: { atk: 0, def: 0, spd: 0, hp: 0 },
     hunger: 80,
     hygiene: 80,
     happiness: 80,
@@ -63,6 +71,9 @@ function ensureCreatureFields(c) {
   if (!c.equippedGear)   c.equippedGear   = { weapon: null, armor: null, trinket: null };
   if (!c.gearInventory)  c.gearInventory  = [];
   if (c.colorTint === undefined) c.colorTint = 0;
+  if (!c.trainedStats)   c.trainedStats   = { atk: 0, def: 0, spd: 0, hp: 0 };
+  if (!c.nature)         c.nature         = rollNature();
+  if (!c.ivs)            c.ivs            = rollIVs();
   return c;
 }
 
@@ -74,7 +85,9 @@ function saveGame() {
     creature: G.creature,
     collection: G.collection,
     inventory: G.inventory,
-    incubation: G.incubation
+    incubation: G.incubation,
+    campaign: G.campaign,
+    daily: G.daily
   };
   localStorage.setItem('hatchbound_save', JSON.stringify(data));
 }
@@ -89,6 +102,8 @@ function loadGame() {
     G.collection = data.collection || [];
     G.inventory = data.inventory || ['basic_meat','bandage'];
     G.incubation = data.incubation || null;
+    G.campaign = data.campaign || { progress: 1, stars: {} };
+    G.daily = data.daily || { last: null, streak: 0 };
     return true;
   } catch { return false; }
 }
@@ -1152,6 +1167,10 @@ const SCREENS = {
     renderTrainScreen();
   },
 
+  campaign() {
+    renderCampaign();
+  },
+
   'battle-prep'() {
     renderBattlePrep();
   },
@@ -1176,6 +1195,22 @@ const SCREENS = {
     renderGearScreen();
   }
 };
+
+// ---- Daily streak: reward returning players ----
+function checkDailyStreak() {
+  const today = new Date().toISOString().slice(0, 10);
+  if (G.daily.last === today) return;
+  const yesterday = new Date(Date.now() - 86400000).toISOString().slice(0, 10);
+  G.daily.streak = (G.daily.last === yesterday) ? (G.daily.streak || 0) + 1 : 1;
+  G.daily.last = today;
+  const reward = 20 + 10 * Math.min(G.daily.streak - 1, 6);
+  G.coins += reward;
+  saveGame();
+  setTimeout(() => {
+    SFX.coin();
+    showToast(`🔥 Day ${G.daily.streak} streak! +${reward} coins!`, 4000);
+  }, 1200);
+}
 
 // ---- Liveliness helpers ----
 function showEmote(container, emoji) {
@@ -1365,8 +1400,24 @@ function renderHome() {
       </button>
     </div>
 
+    ${(() => {
+      const prog = G.campaign.progress || 1;
+      if (prog > CAMPAIGN_TOTAL) return `
+        <button class="campaign-banner campaign-done" onclick="showScreen('campaign')">
+          <span class="cb-icon">🏆</span>
+          <span class="cb-text"><b>Campaign Complete!</b><small>Replay levels to perfect your stars</small></span>
+        </button>`;
+      const lvl = getCampaignLevel(prog);
+      return `
+        <button class="campaign-banner" onclick="showScreen('campaign')" style="--zone-color:${lvl.zone.color}">
+          <span class="cb-icon">${lvl.zone.icon}</span>
+          <span class="cb-text"><b>Campaign — Level ${prog}</b><small>${lvl.zone.name}${lvl.isBoss ? ' · BOSS FIGHT' : ''} · vs Lv.${lvl.level} ${CREATURES[lvl.creature].name}</small></span>
+          <span class="cb-go">▶</span>
+        </button>`;
+    })()}
+
     <div class="home-actions-row">
-      <button class="btn-battle" onclick="showScreen('battle-prep')">⚔️ Battle!</button>
+      <button class="btn-battle" onclick="G.battleMode=null;showScreen('battle-prep')">⚔️ Battle!</button>
       <button class="btn-profile" onclick="showScreen('profile')">📊 Profile</button>
       <button class="btn-gear" onclick="showScreen('gear')">🗡️ Gear</button>
       <button class="btn-collection" onclick="showScreen('collection')">📖 Codex</button>
@@ -1539,29 +1590,37 @@ let trainingGame = null;
 function renderTrainScreen() {
   const el = document.getElementById('train-content');
   if (!el) return;
+  ensureCreatureFields(G.creature);
+  const ts = G.creature.trainedStats;
   el.innerHTML = `
     <div class="train-header">
       <button class="btn-back" onclick="showScreen('home')">← Back</button>
       <h2>Training Center</h2>
     </div>
+    <div class="train-stats-bar">
+      <div class="tsb-item"><span>⚔️ ATK</span><b>+${ts.atk}</b><i>/${TRAIN_STAT_CAP}</i></div>
+      <div class="tsb-item"><span>🛡️ DEF</span><b>+${ts.def}</b><i>/${TRAIN_STAT_CAP}</i></div>
+      <div class="tsb-item"><span>💨 SPD</span><b>+${ts.spd}</b><i>/${TRAIN_STAT_CAP}</i></div>
+      <div class="tsb-item"><span>💗 HP</span><b>+${ts.hp * 2}</b><i>/${TRAIN_STAT_CAP * 2}</i></div>
+    </div>
     <div class="train-games-grid">
       <div class="train-game-card" onclick="startTrainingGame('reflex')">
         <div class="tg-icon">⚡</div>
         <div class="tg-name">Reflex Strike</div>
-        <div class="tg-desc">Tap the flash! Trains Speed & Attack</div>
-        <div class="tg-reward">+20 XP per flash caught</div>
+        <div class="tg-desc">Tap the flash! Builds SPD + ATK permanently</div>
+        <div class="tg-reward">+20 XP per flash · up to +4 SPD</div>
       </div>
       <div class="train-game-card" onclick="startTrainingGame('endurance')">
         <div class="tg-icon">🔥</div>
         <div class="tg-name">Endurance Burn</div>
-        <div class="tg-desc">Hold as long as possible! Trains Stamina</div>
-        <div class="tg-reward">+5 XP per second held</div>
+        <div class="tg-desc">Hold as long as possible! Builds HP + DEF permanently</div>
+        <div class="tg-reward">+5 XP per second · up to +8 HP</div>
       </div>
       <div class="train-game-card" onclick="startTrainingGame('focus')">
         <div class="tg-icon">🎯</div>
         <div class="tg-name">Focus Target</div>
-        <div class="tg-desc">Hit moving targets! Trains Accuracy</div>
-        <div class="tg-reward">+15 XP per hit</div>
+        <div class="tg-desc">Hit moving targets! Builds ATK + SPD permanently</div>
+        <div class="tg-reward">+15 XP per hit · up to +4 ATK</div>
       </div>
     </div>
     <div id="training-game-area" class="training-game-area hidden"></div>
@@ -1712,12 +1771,45 @@ function startFocusGame(area) {
   spawnTarget();
 }
 
+// Each training game builds different stats. Performance decides the gain.
+const TRAIN_STAT_CAP = 60;
+const TRAIN_GAINS = {
+  reflex:    { primary: 'spd', secondary: 'atk', maxScore: 160 },
+  endurance: { primary: 'hp',  secondary: 'def', maxScore: 100 },
+  focus:     { primary: 'atk', secondary: 'spd', maxScore: 90 }
+};
+
 function endMiniGame(type, xpGained) {
-  G.creature.trainingCount++;
+  const c = G.creature;
+  c.trainingCount++;
+  ensureCreatureFields(c);
+
+  // Stat gains scale with performance: 0-4 primary, up to 2 secondary
+  const cfg = TRAIN_GAINS[type];
+  let gainMsg = '';
+  if (cfg && xpGained > 0) {
+    const ratio = Math.min(1, xpGained / cfg.maxScore);
+    const pGain = Math.max(1, Math.round(ratio * 4));
+    const sGain = Math.round(ratio * 2);
+    const ts = c.trainedStats;
+    const applied = [];
+    if (ts[cfg.primary] < TRAIN_STAT_CAP) {
+      const g = Math.min(pGain, TRAIN_STAT_CAP - ts[cfg.primary]);
+      ts[cfg.primary] += g;
+      applied.push(`+${g} ${cfg.primary.toUpperCase()}`);
+    }
+    if (sGain > 0 && ts[cfg.secondary] < TRAIN_STAT_CAP) {
+      const g = Math.min(sGain, TRAIN_STAT_CAP - ts[cfg.secondary]);
+      ts[cfg.secondary] += g;
+      applied.push(`+${g} ${cfg.secondary.toUpperCase()}`);
+    }
+    gainMsg = applied.length ? ` ${applied.join(' ')}` : ' (stats maxed!)';
+  }
+
   grantXP(xpGained);
   saveGame();
-  showToast(`Training complete! +${xpGained} XP!`);
-  setTimeout(() => { renderHome(); showScreen('home'); }, 1500);
+  showToast(`Training complete! +${xpGained} XP!${gainMsg}`, 3200);
+  setTimeout(() => { renderHome(); showScreen('home'); }, 1600);
 }
 
 // ---- Battle Prep ----
@@ -1731,16 +1823,31 @@ function renderBattlePrep() {
   G.stance = 'balanced';
   G.selectedItem = null;
 
-  const oppIdx = Math.floor(Math.random() * AI_OPPONENTS.length);
-  G.opponent = { ...AI_OPPONENTS[oppIdx] };
+  const camp = G.battleMode && G.battleMode.type === 'campaign'
+    ? getCampaignLevel(G.battleMode.level) : null;
+
+  if (camp) {
+    G.opponent = {
+      name: camp.name,
+      creature: camp.creature,
+      level: camp.level,
+      message: camp.message,
+      statMods: camp.statMods
+    };
+  } else {
+    const oppIdx = Math.floor(Math.random() * AI_OPPONENTS.length);
+    G.opponent = { ...AI_OPPONENTS[oppIdx] };
+  }
   G.opponent.id = G.opponent.creature;
   const oppDef = CREATURES[G.opponent.creature];
+  const backTarget = camp ? 'campaign' : 'home';
 
   el.innerHTML = `
     <div class="bp-header">
-      <button class="btn-back" onclick="showScreen('home')">← Back</button>
-      <h2>Battle Preparation</h2>
+      <button class="btn-back" onclick="showScreen('${backTarget}')">← Back</button>
+      <h2>${camp ? `Campaign ${camp.zone.icon} Level ${camp.n}` : 'Battle Preparation'}</h2>
     </div>
+    ${camp && camp.modifier ? `<div class="campaign-modifier-banner">⚠️ ${camp.modifier}</div>` : ''}
 
     <div class="bp-matchup">
       <div class="bp-fighter player-side">
@@ -1934,7 +2041,9 @@ function renderBattleScreen() {
     </div>
   `;
 
-  Battle.init(G.selectedMoves, G.stance, G.selectedItem);
+  const campMods = G.battleMode && G.battleMode.type === 'campaign'
+    ? { playerHpPct: getCampaignLevel(G.battleMode.level).playerHpPct } : null;
+  Battle.init(G.selectedMoves, G.stance, G.selectedItem, campMods);
   Battle.setElements(
     document.getElementById('battle-log'),
     document.getElementById('battle-player-hpbar'),
@@ -1950,38 +2059,65 @@ function renderBattleScreen() {
     name: CREATURES[G.opponent.creature].name,
     level: G.opponent.level,
     personality: CREATURES[G.opponent.creature].personality,
-    trainingCount: 0
+    trainingCount: 0,
+    statMods: G.opponent.statMods || null
   };
 
   Battle.run(G.creature, opponentCreature).then(result => {
     G.battleResult = result;
     G.creature.battleCount++;
+    const camp = G.battleMode && G.battleMode.type === 'campaign'
+      ? getCampaignLevel(G.battleMode.level) : null;
+
     if (result.winner === 'player') {
+      SFX.victoryTheme();
       G.creature.hp = Math.max(1, result.playerHpLeft);
       const xpReward = 40 + G.opponent.level * 5;
       grantXP(xpReward);
-      G.coins += 20 + G.opponent.level * 2;
-      // Chance to earn gear from battle
-      if (Math.random() < 0.3) {
-        const pool = Object.keys(GEAR).filter(gid => {
-          const g = GEAR[gid];
-          return g.rarity === 'common' || (G.opponent.level >= 12 && g.rarity === 'rare');
-        });
-        const earnedId = pool[Math.floor(Math.random() * pool.length)];
-        ensureCreatureFields(G.creature);
-        G.creature.gearInventory.push(earnedId);
-        showToast(`Victory! +${xpReward} XP! Found: ${GEAR[earnedId].name}!`);
+
+      if (camp) {
+        // Campaign rewards: stars, coins (double on first clear), boss gear
+        const stars = campaignStars(result.playerHpLeft, result.playerMaxHp);
+        const firstClear = camp.n >= (G.campaign.progress || 1);
+        const prevStars = G.campaign.stars[camp.n] || 0;
+        G.campaign.stars[camp.n] = Math.max(prevStars, stars);
+        const coinReward = firstClear ? camp.coins * 2 : camp.coins;
+        G.coins += coinReward;
+        if (firstClear) G.campaign.progress = camp.n + 1;
+        G.battleResult.campaign = { level: camp.n, stars, coinReward, firstClear };
+        if (camp.bossGear && firstClear) {
+          const pool = Object.keys(GEAR).filter(gid => GEAR[gid].rarity === 'rare' || GEAR[gid].rarity === 'epic');
+          const earnedId = pool[(camp.n * 3) % pool.length];
+          ensureCreatureFields(G.creature);
+          G.creature.gearInventory.push(earnedId);
+          G.battleResult.campaign.gear = earnedId;
+        }
+        showToast(`Level ${camp.n} cleared! +${coinReward} coins!`);
       } else {
-        showToast(`Victory! +${xpReward} XP!`);
+        G.coins += 20 + G.opponent.level * 2;
+        // Chance to earn gear from battle
+        if (Math.random() < 0.3) {
+          const pool = Object.keys(GEAR).filter(gid => {
+            const g = GEAR[gid];
+            return g.rarity === 'common' || (G.opponent.level >= 12 && g.rarity === 'rare');
+          });
+          const earnedId = pool[Math.floor(Math.random() * pool.length)];
+          ensureCreatureFields(G.creature);
+          G.creature.gearInventory.push(earnedId);
+          showToast(`Victory! +${xpReward} XP! Found: ${GEAR[earnedId].name}!`);
+        } else {
+          showToast(`Victory! +${xpReward} XP!`);
+        }
       }
-      SFX.coin();
+      setTimeout(() => SFX.coin(), 2000);
     } else {
+      SFX.defeatTheme();
       G.creature.hp = Math.max(1, Math.floor(G.creature.maxHp * 0.1));
       G.creature.recoveryEvents++;
       showToast(`Defeated... Rest and recover!`);
     }
     saveGame();
-    setTimeout(() => showScreen('battle-result'), 2000);
+    setTimeout(() => showScreen('battle-result'), 2200);
   });
 }
 
@@ -1994,20 +2130,34 @@ function renderBattleResult() {
   const el = document.getElementById('battle-result-content');
   if (!el) return;
 
+  const camp = result.campaign;
+  const nextLevel = camp && camp.level < CAMPAIGN_TOTAL ? camp.level + 1 : null;
+
   el.innerHTML = `
     <div class="result-screen ${won ? 'result-win' : 'result-lose'}">
       <div class="result-emoji">${won ? '🏆' : '💔'}</div>
       <div class="result-title">${won ? 'VICTORY!' : 'DEFEATED...'}</div>
+      ${camp && won ? `
+        <div class="result-stars">
+          ${[1,2,3].map(i => `<span class="star ${i <= camp.stars ? 'star-earned' : 'star-empty'}" style="animation-delay:${i*0.25}s">⭐</span>`).join('')}
+        </div>` : ''}
       <div class="result-creature" style="filter:drop-shadow(0 0 20px ${def.glow})">
         ${getSpriteHTML(G.creature.id, stageFromLevel(G.creature.level).id, 120)}
       </div>
       <div class="result-name">${G.creature.name}</div>
       <div class="result-stats">
-        <div class="rs-stat">HP Remaining: ${result.playerHpLeft} / ${G.creature.maxHp}</div>
+        <div class="rs-stat">HP Remaining: ${result.playerHpLeft} / ${result.playerMaxHp || G.creature.maxHp}</div>
         <div class="rs-stat">Rounds Fought: ${result.rounds.length}</div>
-        ${won ? `<div class="rs-reward">+${40 + G.opponent.level*5} XP  •  +${20 + G.opponent.level*2} coins</div>` : ''}
+        ${won && camp ? `<div class="rs-reward">+${40 + G.opponent.level*5} XP  •  +${camp.coinReward} coins${camp.gear ? `  •  ${GEAR[camp.gear].icon} ${GEAR[camp.gear].name}!` : ''}</div>` : ''}
+        ${won && !camp ? `<div class="rs-reward">+${40 + G.opponent.level*5} XP  •  +${20 + G.opponent.level*2} coins</div>` : ''}
       </div>
-      <button class="btn-primary" onclick="showScreen('home')">Return to Camp</button>
+      ${camp ? `
+        ${won && nextLevel && nextLevel <= G.campaign.progress ? `<button class="btn-primary" onclick="startCampaignBattle(${nextLevel})">Next Level ▶</button>` : ''}
+        ${!won ? `<button class="btn-primary" onclick="startCampaignBattle(${G.battleMode.level})">Try Again</button>` : ''}
+        <button class="btn-secondary" onclick="showScreen('campaign')">Campaign Map</button>
+      ` : `
+        <button class="btn-primary" onclick="showScreen('home')">Return to Camp</button>
+      `}
     </div>
   `;
 }
@@ -2047,9 +2197,10 @@ function renderProfile() {
       <div class="profile-card">
         <div class="pc-title">Battle Stats</div>
         <div class="pc-row"><span>HP</span><b>${c.hp} / ${c.maxHp}</b></div>
-        <div class="pc-row"><span>Attack</span><b>${Math.floor(def.baseStats.atk * (1+(c.level-1)*0.03))}</b></div>
-        <div class="pc-row"><span>Defense</span><b>${Math.floor(def.baseStats.def * (1+(c.level-1)*0.03))}</b></div>
-        <div class="pc-row"><span>Speed</span><b>${Math.floor(def.baseStats.spd * (1+(c.level-1)*0.03))}</b></div>
+        <div class="pc-row"><span>Attack</span><b>${Math.floor(def.baseStats.atk * (1+(c.level-1)*0.03))}${c.trainedStats && c.trainedStats.atk ? ` <i class="trained-plus">+${c.trainedStats.atk}</i>` : ''}</b></div>
+        <div class="pc-row"><span>Defense</span><b>${Math.floor(def.baseStats.def * (1+(c.level-1)*0.03))}${c.trainedStats && c.trainedStats.def ? ` <i class="trained-plus">+${c.trainedStats.def}</i>` : ''}</b></div>
+        <div class="pc-row"><span>Speed</span><b>${Math.floor(def.baseStats.spd * (1+(c.level-1)*0.03))}${c.trainedStats && c.trainedStats.spd ? ` <i class="trained-plus">+${c.trainedStats.spd}</i>` : ''}</b></div>
+        ${c.nature && NATURES[c.nature] ? `<div class="pc-row"><span>Nature</span><b>${NATURES[c.nature].icon} ${NATURES[c.nature].name}</b></div>` : ''}
       </div>
       <div class="profile-card">
         <div class="pc-title">Care History</div>
@@ -2424,6 +2575,7 @@ function startParticles() {
 // ---- Button Event Listeners (global) ----
 window.addEventListener('DOMContentLoaded', () => {
   loadGame();
+  checkDailyStreak();
 
   // Title buttons
   document.getElementById('btn-new-game')?.addEventListener('click', () => showScreen('choose-category'));
