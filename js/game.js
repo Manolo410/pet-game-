@@ -2576,6 +2576,10 @@ function startParticles() {
 window.addEventListener('DOMContentLoaded', () => {
   loadGame();
   checkDailyStreak();
+  detectCustomSprites(found => {
+    // Custom art arrived after first paint — refresh the current screen
+    if (found && G.screen !== 'hatching' && G.screen !== 'battle') showScreen(G.screen);
+  });
 
   // Title buttons
   document.getElementById('btn-new-game')?.addEventListener('click', () => showScreen('choose-category'));
