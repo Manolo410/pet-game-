@@ -23,6 +23,37 @@ const Battle = (() => {
 
     const careBonus = isPlayer ? Math.min(20, Math.floor((creature.trainingCount || 0) / 5)) : 0;
 
+    // Nature/IV rolls (unique per hatched creature)
+    if (creature.ivs) {
+      hp   = Math.floor(hp   * (creature.ivs.hp  || 1));
+      atk  = Math.floor(atk  * (creature.ivs.atk || 1));
+      def_ = Math.floor(def_ * (creature.ivs.def || 1));
+      spd  = Math.floor(spd  * (creature.ivs.spd || 1));
+    }
+    if (creature.nature && typeof NATURES !== 'undefined' && NATURES[creature.nature]) {
+      const n = NATURES[creature.nature].mods;
+      hp   = Math.floor(hp   * (n.hp  || 1));
+      atk  = Math.floor(atk  * (n.atk || 1));
+      def_ = Math.floor(def_ * (n.def || 1));
+      spd  = Math.floor(spd  * (n.spd || 1));
+    }
+
+    // Trained stats: earned in the Training Center, flat additions
+    if (isPlayer && creature.trainedStats) {
+      hp   += (creature.trainedStats.hp  || 0) * 2;
+      atk  += creature.trainedStats.atk || 0;
+      def_ += creature.trainedStats.def || 0;
+      spd  += creature.trainedStats.spd || 0;
+    }
+
+    // Campaign modifiers: AI stat multipliers, player HP handicap
+    if (!isPlayer && creature.statMods) {
+      hp   = Math.floor(hp   * (creature.statMods.hp  || 1));
+      atk  = Math.floor(atk  * (creature.statMods.atk || 1));
+      def_ = Math.floor(def_ * (creature.statMods.def || 1));
+      spd  = Math.floor(spd  * (creature.statMods.spd || 1));
+    }
+
     // Apply gear bonuses for player
     if (isPlayer && creature.equippedGear && typeof GEAR !== 'undefined') {
       ['weapon', 'armor', 'trinket'].forEach(slot => {
@@ -37,6 +68,9 @@ const Battle = (() => {
       });
     }
 
+    const startHp = isPlayer && state.mods && state.mods.playerHpPct
+      ? Math.max(1, Math.floor(hp * state.mods.playerHpPct)) : hp;
+
     return {
       id:        creature.id,
       name:      creature.name,
@@ -45,7 +79,7 @@ const Battle = (() => {
       color:     def.color,
       glow:      def.glow,
       maxHp:     hp,
-      hp:        hp,
+      hp:        startHp,
       atk:       atk + careBonus,
       def:       def_,
       spd:       spd,
@@ -292,6 +326,7 @@ const Battle = (() => {
       rounds,
       winner: player.hp > 0 ? 'player' : 'opponent',
       playerHpLeft: player.hp,
+      playerMaxHp: player.maxHp,
       opponentHpLeft: opponent.hp
     };
   }
@@ -365,10 +400,18 @@ const Battle = (() => {
             src.classList.add('attack-lunge');
             setTimeout(() => src.classList.remove('attack-lunge'), 500);
           }
-          if (move) spawnAttackEffect(move.element, ev.attacker === playerC.id ? 'opp' : 'player');
+          if (move) {
+            spawnAttackEffect(move.element, ev.attacker === playerC.id ? 'opp' : 'player');
+            if (move.power > 0) SFX.attack(move.element);
+          }
         }
 
+        if (ev.type === 'evade') SFX.evadeSwish();
+        if (ev.type === 'buff') SFX.powerUp();
+        if (ev.type === 'status') SFX.debuff();
+
         if (ev.type === 'damage') {
+          SFX.impact(ev.elemMult || 1);
           const target = ev.target === opponentC.id ? p2Sprite : p1Sprite;
           if (target) {
             target.classList.add('hit-shake');
@@ -427,8 +470,8 @@ const Battle = (() => {
 
   // ---- Public API ----
   return {
-    init(selectedMoves, stance, selectedItem) {
-      state = { selectedMoves, stance, selectedItem };
+    init(selectedMoves, stance, selectedItem, mods) {
+      state = { selectedMoves, stance, selectedItem, mods: mods || null };
     },
 
     setElements(log, hp1Bar, hp1Num, hp2Bar, hp2Num, spr1, spr2) {
@@ -444,6 +487,7 @@ const Battle = (() => {
     async run(playerCreature, opponentData) {
       const player   = buildCombatant(playerCreature, true);
       const opponent = buildCombatant(opponentData,   false);
+      SFX.battleStart();
       const result   = simulateBattle(player, opponent);
       await playBattle(result, player, opponent);
       return result;

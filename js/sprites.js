@@ -1093,16 +1093,24 @@ const STAGE_STYLES = {
   mythic:   { scale: 1.40, filter: 'brightness(1.3) saturate(1.35) contrast(1.1)',  extra: '' }
 };
 
-// Returns an HTML string: SVG wrapped in a styled container
+// Returns an HTML string: SVG wrapped in a styled container.
+// If a custom image is registered for this creature+stage in
+// CUSTOM_SPRITES (js/custom-sprites.js), it is used instead —
+// so dropped-in AI-generated art overrides the built-in SVGs.
 function getSpriteHTML(creatureId, stage, sizePx) {
-  const svg = SPRITES[creatureId] || '';
   const styleDef = STAGE_STYLES[stage] || STAGE_STYLES.baby;
   const base = sizePx || 120;
   const scaled = Math.round(base * styleDef.scale);
 
+  const custom = typeof CUSTOM_SPRITES !== 'undefined' && CUSTOM_SPRITES[creatureId];
+  const inner = custom && custom.includes(stage)
+    ? `<img src="assets/creatures/${creatureId}_${stage}.png" alt="" draggable="false"
+            style="width:100%;height:100%;object-fit:contain;image-rendering:auto">`
+    : (SPRITES[creatureId] || '');
+
   return `<div class="creature-sprite-wrap" style="width:${base}px;height:${base}px;display:flex;align-items:center;justify-content:center">
     <div style="width:${scaled}px;height:${scaled}px;filter:${styleDef.filter};transition:all 0.5s ease;">
-      ${svg}
+      ${inner}
     </div>
   </div>`;
 }

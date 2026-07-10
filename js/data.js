@@ -537,3 +537,25 @@ const CREATURE_LORE = {
     quote:  '"I don\'t win fights. I end them at a cellular level."'
   }
 };
+
+
+// ---- Natures: rolled once per hatched creature, make every playthrough unique ----
+const NATURES = {
+  fierce:   { name: 'Fierce',   icon: '🔥', desc: 'Hits harder',        mods: { atk: 1.12, def: 0.96 } },
+  sturdy:   { name: 'Sturdy',   icon: '🛡️', desc: 'Takes less damage',  mods: { def: 1.12, spd: 0.96 } },
+  swift:    { name: 'Swift',    icon: '💨', desc: 'Strikes first',      mods: { spd: 1.12, hp: 0.96 } },
+  vital:    { name: 'Vital',    icon: '💗', desc: 'More health',        mods: { hp: 1.12, atk: 0.96 } },
+  cunning:  { name: 'Cunning',  icon: '🌀', desc: 'Fast and fierce',    mods: { atk: 1.06, spd: 1.06, hp: 0.94 } },
+  stoic:    { name: 'Stoic',    icon: '🗿', desc: 'A living wall',      mods: { def: 1.06, hp: 1.06, spd: 0.94 } },
+  balanced: { name: 'Balanced', icon: '⚖️', desc: 'Even in all things', mods: { atk: 1.03, def: 1.03, spd: 1.03, hp: 1.03 } }
+};
+
+function rollNature() {
+  const keys = Object.keys(NATURES);
+  return keys[Math.floor(Math.random() * keys.length)];
+}
+
+function rollIVs() {
+  const roll = () => Math.round((0.94 + Math.random() * 0.14) * 100) / 100; // 0.94 - 1.08
+  return { hp: roll(), atk: roll(), def: roll(), spd: roll() };
+}
