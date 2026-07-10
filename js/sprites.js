@@ -1103,8 +1103,9 @@ function getSpriteHTML(creatureId, stage, sizePx) {
   const scaled = Math.round(base * styleDef.scale);
 
   const custom = typeof CUSTOM_SPRITES !== 'undefined' && CUSTOM_SPRITES[creatureId];
-  const inner = custom && custom.includes(stage)
-    ? `<img src="assets/creatures/${creatureId}_${stage}.png" alt="" draggable="false"
+  const phase = typeof CUSTOM_STAGE_MAP !== 'undefined' ? (CUSTOM_STAGE_MAP[stage] || stage) : stage;
+  const inner = custom && custom.includes(phase)
+    ? `<img src="assets/creatures/${creatureId}_${phase}.png" alt="" draggable="false"
             style="width:100%;height:100%;object-fit:contain;image-rendering:auto">`
     : (SPRITES[creatureId] || '');
 

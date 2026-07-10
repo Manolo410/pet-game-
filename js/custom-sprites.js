@@ -1,30 +1,57 @@
 // =====================================================
-// HATCHBOUND — Custom Character Art (optional)
+// HATCHBOUND — Custom Character Art (zero-config)
 // =====================================================
-// Want higher-fidelity characters than the built-in SVG sprites?
-// Generate art with any AI image tool (Krea, Midjourney, DALL-E,
-// Leonardo, etc.), then drop the images in and register them here.
+// Drop AI-generated images into assets/creatures/ and the game
+// finds them automatically at startup. NO code changes needed.
 //
-// HOW TO USE:
-// 1. Generate a character image with a TRANSPARENT background
-//    (PNG or WebP, roughly square, ~512x512 works great).
-//    Prompt tip: "digimon-style armored fire lion monster, angular
-//    plates, glowing energy circuits, game character, full body,
-//    transparent background, no text"
-// 2. Save it as:  assets/creatures/<creatureId>_<stage>.png
-//    e.g.         assets/creatures/fire_lion_baby.png
-//                 assets/creatures/fire_lion_adult.png
-//    Creature ids: fire_lion, komodo, snake, dinosaur, gorilla, bear,
-//                  bat, eagle, owl, sea_dragon, storm_shark, jellyfish
-//    Stages:       baby, child, teen, adult, champion, mythic
-// 3. Register each file below. Any stage NOT listed automatically
-//    falls back to the built-in SVG sprite, so you can upgrade
-//    creatures one image at a time.
+// File naming (exact, lowercase, .png):
+//   assets/creatures/<creatureId>_<phase>.png
+//   phases: baby, teen, adult   (3 images per creature)
 //
-// Example:
-//   const CUSTOM_SPRITES = {
-//     fire_lion: ['baby', 'adult', 'champion'],
-//     sea_dragon: ['mythic']
-//   };
+//   e.g. assets/creatures/fire_lion_baby.png
+//        assets/creatures/fire_lion_teen.png
+//        assets/creatures/fire_lion_adult.png
+//
+// Creature ids: fire_lion, komodo, snake, dinosaur, gorilla, bear,
+//               bat, eagle, owl, sea_dragon, storm_shark, jellyfish
+//
+// The game has 6 growth stages but only needs 3 art phases:
+//   baby image covers Baby + Child, teen covers Teen,
+//   adult covers Adult + Champion + Mythic.
+// Any missing image falls back to the built-in SVG sprite, so you
+// can upgrade one image at a time.
+//
+// Ready-to-paste generation prompts for all 36 images are in
+// assets/creatures/PROMPTS.md
 
+// Populated automatically by detectCustomSprites() at startup
 const CUSTOM_SPRITES = {};
+
+// Maps the 6 game stages onto the 3 art phases
+const CUSTOM_STAGE_MAP = {
+  baby: 'baby', child: 'baby',
+  teen: 'teen',
+  adult: 'adult', champion: 'adult', mythic: 'adult'
+};
+const CUSTOM_SPRITE_PHASES = ['baby', 'teen', 'adult'];
+
+// Probes assets/creatures/ for every creature+phase image.
+// Calls onDone(foundAny) once all probes settle.
+function detectCustomSprites(onDone) {
+  const ids = Object.keys(CREATURES);
+  let pending = ids.length * CUSTOM_SPRITE_PHASES.length;
+  let found = false;
+  const settle = () => { if (--pending === 0 && onDone) onDone(found); };
+  ids.forEach(id => {
+    CUSTOM_SPRITE_PHASES.forEach(phase => {
+      const img = new Image();
+      img.onload = () => {
+        (CUSTOM_SPRITES[id] = CUSTOM_SPRITES[id] || []).push(phase);
+        found = true;
+        settle();
+      };
+      img.onerror = settle;
+      img.src = `assets/creatures/${id}_${phase}.png`;
+    });
+  });
+}
