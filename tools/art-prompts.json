@@ -1,0 +1,218 @@
+[
+  {
+    "file": "fire_lion_baby.png",
+    "creature": "fire_lion",
+    "phase": "baby",
+    "prompt": "baby fire lion cub, huge amber eyes, tiny flame-tipped tail glowing like an ember, small orange and gold armor shoulder pads, warm orange fur with glowing circuit lines, chibi hatchling proportions, oversized head and eyes, tiny body, cute but fierce, minimal armor, 2D game character art, digimon-inspired armored digital monster, cel-shaded with dramatic rim lighting, angular armor plates, glowing energy circuit lines, full body, centered, facing slightly left, isolated on plain solid white background, no text, no watermark, no ground shadow"
+  },
+  {
+    "file": "fire_lion_teen.png",
+    "creature": "fire_lion",
+    "phase": "teen",
+    "prompt": "adolescent fire lion, growing mane of crystallized flames, partial orange and black armor plates on chest and forelegs, glowing orange energy circuits along its flanks, cinders drifting from its mouth, lean adolescent build, partial armor forming, energetic battle stance, 2D game character art, digimon-inspired armored digital monster, cel-shaded with dramatic rim lighting, angular armor plates, glowing energy circuit lines, full body, centered, facing slightly left, isolated on plain solid white background, no text, no watermark, no ground shadow"
+  },
+  {
+    "file": "fire_lion_adult.png",
+    "creature": "fire_lion",
+    "phase": "adult",
+    "prompt": "armored fire lion war beast, full mane of blazing crystalline flames, heavy volcanic black-and-orange armor with glowing solar core in the chest plate, molten claws, burning eyes, ember circuits pulsing across its body, massive battle-hardened build, full heavy armor, imposing pose, crackling with elemental power, 2D game character art, digimon-inspired armored digital monster, cel-shaded with dramatic rim lighting, angular armor plates, glowing energy circuit lines, full body, centered, facing slightly left, isolated on plain solid white background, no text, no watermark, no ground shadow"
+  },
+  {
+    "file": "komodo_baby.png",
+    "creature": "komodo",
+    "phase": "baby",
+    "prompt": "baby komodo dragon, chunky body, big green eyes, tiny venom-tipped claws, small thorn buds on its back, bright toxic-green scales with faint glowing circuit lines, chibi hatchling proportions, oversized head and eyes, tiny body, cute but fierce, minimal armor, 2D game character art, digimon-inspired armored digital monster, cel-shaded with dramatic rim lighting, angular armor plates, glowing energy circuit lines, full body, centered, facing slightly left, isolated on plain solid white background, no text, no watermark, no ground shadow"
+  },
+  {
+    "file": "komodo_teen.png",
+    "creature": "komodo",
+    "phase": "teen",
+    "prompt": "adolescent komodo dragon, rows of sharp thorn spines growing along its back, green and dark-gray armor plates on shoulders, venom dripping from fangs, toxic-green energy circuits on its hide, lean adolescent build, partial armor forming, energetic battle stance, 2D game character art, digimon-inspired armored digital monster, cel-shaded with dramatic rim lighting, angular armor plates, glowing energy circuit lines, full body, centered, facing slightly left, isolated on plain solid white background, no text, no watermark, no ground shadow"
+  },
+  {
+    "file": "komodo_adult.png",
+    "creature": "komodo",
+    "phase": "adult",
+    "prompt": "armored komodo dragon war beast, thick plated hide in toxic green and black, huge thorned back spines radiating a poisonous aura, heavy claws with glowing green venom channels, armored skull crest, dripping acid, massive battle-hardened build, full heavy armor, imposing pose, crackling with elemental power, 2D game character art, digimon-inspired armored digital monster, cel-shaded with dramatic rim lighting, angular armor plates, glowing energy circuit lines, full body, centered, facing slightly left, isolated on plain solid white background, no text, no watermark, no ground shadow"
+  },
+  {
+    "file": "snake_baby.png",
+    "creature": "snake",
+    "phase": "baby",
+    "prompt": "baby serpent, small coiled body, enormous curious purple eyes, dark-violet scales with a faint glowing shadow aura, one small armor plate on its forehead, chibi hatchling proportions, oversized head and eyes, tiny body, cute but fierce, minimal armor, 2D game character art, digimon-inspired armored digital monster, cel-shaded with dramatic rim lighting, angular armor plates, glowing energy circuit lines, full body, centered, facing slightly left, isolated on plain solid white background, no text, no watermark, no ground shadow"
+  },
+  {
+    "file": "snake_teen.png",
+    "creature": "snake",
+    "phase": "teen",
+    "prompt": "adolescent shadow serpent, sleek coiled body, dark purple scales with ribbons of shadow energy flowing through them, angular violet armor segments along its spine, narrow glowing eyes, lean adolescent build, partial armor forming, energetic battle stance, 2D game character art, digimon-inspired armored digital monster, cel-shaded with dramatic rim lighting, angular armor plates, glowing energy circuit lines, full body, centered, facing slightly left, isolated on plain solid white background, no text, no watermark, no ground shadow"
+  },
+  {
+    "file": "snake_adult.png",
+    "creature": "snake",
+    "phase": "adult",
+    "prompt": "armored shadow serpent deity, huge coiled body in near-black violet scales, heavy segmented dark armor with glowing purple runes, hood flared like a cobra with shadow flames, piercing glowing slit eyes, wisps of darkness swirling, massive battle-hardened build, full heavy armor, imposing pose, crackling with elemental power, 2D game character art, digimon-inspired armored digital monster, cel-shaded with dramatic rim lighting, angular armor plates, glowing energy circuit lines, full body, centered, facing slightly left, isolated on plain solid white background, no text, no watermark, no ground shadow"
+  },
+  {
+    "file": "dinosaur_baby.png",
+    "creature": "dinosaur",
+    "phase": "baby",
+    "prompt": "baby t-rex, oversized head with big eyes and tiny arms, stubby tail, amber-orange hide with small stone pebble armor patches, cute ferocious grin, chibi hatchling proportions, oversized head and eyes, tiny body, cute but fierce, minimal armor, 2D game character art, digimon-inspired armored digital monster, cel-shaded with dramatic rim lighting, angular armor plates, glowing energy circuit lines, full body, centered, facing slightly left, isolated on plain solid white background, no text, no watermark, no ground shadow"
+  },
+  {
+    "file": "dinosaur_teen.png",
+    "creature": "dinosaur",
+    "phase": "teen",
+    "prompt": "adolescent raptor, athletic predator build, amber and gray hide with rocky armor plates forming on back and thighs, glowing orange circuit lines, powerful jaw, dust and pebbles floating around its stomping feet, lean adolescent build, partial armor forming, energetic battle stance, 2D game character art, digimon-inspired armored digital monster, cel-shaded with dramatic rim lighting, angular armor plates, glowing energy circuit lines, full body, centered, facing slightly left, isolated on plain solid white background, no text, no watermark, no ground shadow"
+  },
+  {
+    "file": "dinosaur_adult.png",
+    "creature": "dinosaur",
+    "phase": "adult",
+    "prompt": "armored tyrannosaur war beast, hide fused with granite armor slabs, glowing magma-orange circuit veins between stone plates, colossal jaws, spiked stone tail club, cracked earth beneath it, massive battle-hardened build, full heavy armor, imposing pose, crackling with elemental power, 2D game character art, digimon-inspired armored digital monster, cel-shaded with dramatic rim lighting, angular armor plates, glowing energy circuit lines, full body, centered, facing slightly left, isolated on plain solid white background, no text, no watermark, no ground shadow"
+  },
+  {
+    "file": "gorilla_baby.png",
+    "creature": "gorilla",
+    "phase": "baby",
+    "prompt": "baby gorilla, oversized fists bigger than its head, determined scowl, gray fur with small silver armor knuckle guards, faint white energy circuits on its arms, chibi hatchling proportions, oversized head and eyes, tiny body, cute but fierce, minimal armor, 2D game character art, digimon-inspired armored digital monster, cel-shaded with dramatic rim lighting, angular armor plates, glowing energy circuit lines, full body, centered, facing slightly left, isolated on plain solid white background, no text, no watermark, no ground shadow"
+  },
+  {
+    "file": "gorilla_teen.png",
+    "creature": "gorilla",
+    "phase": "teen",
+    "prompt": "adolescent gorilla brawler, lean muscular build, silver-gray fur, angular gunmetal armor forming on shoulders and forearms, glowing white knuckle plates, boxing stance, lean adolescent build, partial armor forming, energetic battle stance, 2D game character art, digimon-inspired armored digital monster, cel-shaded with dramatic rim lighting, angular armor plates, glowing energy circuit lines, full body, centered, facing slightly left, isolated on plain solid white background, no text, no watermark, no ground shadow"
+  },
+  {
+    "file": "gorilla_adult.png",
+    "creature": "gorilla",
+    "phase": "adult",
+    "prompt": "armored gorilla war chief, hulking build with full gunmetal and steel armor across chest and arms, colossal glowing gauntlet fists, silverback plating, white energy circuits blazing across its armor, mid ground-pound pose, massive battle-hardened build, full heavy armor, imposing pose, crackling with elemental power, 2D game character art, digimon-inspired armored digital monster, cel-shaded with dramatic rim lighting, angular armor plates, glowing energy circuit lines, full body, centered, facing slightly left, isolated on plain solid white background, no text, no watermark, no ground shadow"
+  },
+  {
+    "file": "bear_baby.png",
+    "creature": "bear",
+    "phase": "baby",
+    "prompt": "baby bear cub, round and impossibly fluffy, big warm eyes, brown fur with tiny stone pebble armor patches on shoulders, faint amber circuit glow, chibi hatchling proportions, oversized head and eyes, tiny body, cute but fierce, minimal armor, 2D game character art, digimon-inspired armored digital monster, cel-shaded with dramatic rim lighting, angular armor plates, glowing energy circuit lines, full body, centered, facing slightly left, isolated on plain solid white background, no text, no watermark, no ground shadow"
+  },
+  {
+    "file": "bear_teen.png",
+    "creature": "bear",
+    "phase": "teen",
+    "prompt": "adolescent bear, sturdy build, brown fur hardening into rock patches on back and forearms, amber armor plates forming, glowing amber circuit lines, standing on hind legs, lean adolescent build, partial armor forming, energetic battle stance, 2D game character art, digimon-inspired armored digital monster, cel-shaded with dramatic rim lighting, angular armor plates, glowing energy circuit lines, full body, centered, facing slightly left, isolated on plain solid white background, no text, no watermark, no ground shadow"
+  },
+  {
+    "file": "bear_adult.png",
+    "creature": "bear",
+    "phase": "adult",
+    "prompt": "armored bear fortress beast, granite-fused hide, heavy stone slab armor across its back and shoulders, glowing amber energy seams between rock plates, giant steel-tipped claws, immovable stance, massive battle-hardened build, full heavy armor, imposing pose, crackling with elemental power, 2D game character art, digimon-inspired armored digital monster, cel-shaded with dramatic rim lighting, angular armor plates, glowing energy circuit lines, full body, centered, facing slightly left, isolated on plain solid white background, no text, no watermark, no ground shadow"
+  },
+  {
+    "file": "bat_baby.png",
+    "creature": "bat",
+    "phase": "baby",
+    "prompt": "baby bat, oversized head with huge glowing violet eyes, tiny folded wings, fluffy dark-purple fur, one small armor plate on its chest, chibi hatchling proportions, oversized head and eyes, tiny body, cute but fierce, minimal armor, 2D game character art, digimon-inspired armored digital monster, cel-shaded with dramatic rim lighting, angular armor plates, glowing energy circuit lines, full body, centered, facing slightly left, isolated on plain solid white background, no text, no watermark, no ground shadow"
+  },
+  {
+    "file": "bat_teen.png",
+    "creature": "bat",
+    "phase": "teen",
+    "prompt": "adolescent bat, sleek build with wide angular wings, dark purple membrane with glowing violet circuit veins, armor forming on chest and wing joints, sharp ears, visible echolocation rings, lean adolescent build, partial armor forming, energetic battle stance, 2D game character art, digimon-inspired armored digital monster, cel-shaded with dramatic rim lighting, angular armor plates, glowing energy circuit lines, full body, centered, facing slightly left, isolated on plain solid white background, no text, no watermark, no ground shadow"
+  },
+  {
+    "file": "bat_adult.png",
+    "creature": "bat",
+    "phase": "adult",
+    "prompt": "armored vampire bat war beast, huge blade-edged wings with glowing violet energy membranes, segmented dark armor over torso, glowing purple sonic emitter in chest plate, fanged snarl, shadow mist swirling, massive battle-hardened build, full heavy armor, imposing pose, crackling with elemental power, 2D game character art, digimon-inspired armored digital monster, cel-shaded with dramatic rim lighting, angular armor plates, glowing energy circuit lines, full body, centered, facing slightly left, isolated on plain solid white background, no text, no watermark, no ground shadow"
+  },
+  {
+    "file": "eagle_baby.png",
+    "creature": "eagle",
+    "phase": "baby",
+    "prompt": "baby eagle chick, round fluffy sky-blue body, oversized eyes, tiny wings, small white and cyan armor plate on its head, faint wind swirl lines around it, chibi hatchling proportions, oversized head and eyes, tiny body, cute but fierce, minimal armor, 2D game character art, digimon-inspired armored digital monster, cel-shaded with dramatic rim lighting, angular armor plates, glowing energy circuit lines, full body, centered, facing slightly left, isolated on plain solid white background, no text, no watermark, no ground shadow"
+  },
+  {
+    "file": "eagle_teen.png",
+    "creature": "eagle",
+    "phase": "teen",
+    "prompt": "adolescent storm eagle, sleek aerodynamic build, sky-blue and white feathers with cyan circuit lines, angular armor forming on wings and talons, wind currents bending around its wings, lean adolescent build, partial armor forming, energetic battle stance, 2D game character art, digimon-inspired armored digital monster, cel-shaded with dramatic rim lighting, angular armor plates, glowing energy circuit lines, full body, centered, facing slightly left, isolated on plain solid white background, no text, no watermark, no ground shadow"
+  },
+  {
+    "file": "eagle_adult.png",
+    "creature": "eagle",
+    "phase": "adult",
+    "prompt": "armored storm eagle war bird, huge razor wings with blade-like armored feathers in blue and white, glowing cyan wind circuits, heavy talon gauntlets, storm clouds and lightning crackling behind its wingspan, massive battle-hardened build, full heavy armor, imposing pose, crackling with elemental power, 2D game character art, digimon-inspired armored digital monster, cel-shaded with dramatic rim lighting, angular armor plates, glowing energy circuit lines, full body, centered, facing slightly left, isolated on plain solid white background, no text, no watermark, no ground shadow"
+  },
+  {
+    "file": "owl_baby.png",
+    "creature": "owl",
+    "phase": "baby",
+    "prompt": "baby owl, huge hypnotic spiral purple eyes, round fluffy violet body, tiny wings, small mystic rune armor plate on forehead, sparkles drifting around it, chibi hatchling proportions, oversized head and eyes, tiny body, cute but fierce, minimal armor, 2D game character art, digimon-inspired armored digital monster, cel-shaded with dramatic rim lighting, angular armor plates, glowing energy circuit lines, full body, centered, facing slightly left, isolated on plain solid white background, no text, no watermark, no ground shadow"
+  },
+  {
+    "file": "owl_teen.png",
+    "creature": "owl",
+    "phase": "teen",
+    "prompt": "adolescent mystic owl, elegant build, violet and lavender feathers with glowing arcane circuit patterns, crescent-moon armor plates forming on chest and wings, eyes glowing with psychic rings, lean adolescent build, partial armor forming, energetic battle stance, 2D game character art, digimon-inspired armored digital monster, cel-shaded with dramatic rim lighting, angular armor plates, glowing energy circuit lines, full body, centered, facing slightly left, isolated on plain solid white background, no text, no watermark, no ground shadow"
+  },
+  {
+    "file": "owl_adult.png",
+    "creature": "owl",
+    "phase": "adult",
+    "prompt": "armored arch-mage owl, regal violet plumage with gold-trimmed mystic armor, floating arcane rune rings orbiting its wings, third-eye gem blazing on its armored forehead, psychic energy radiating in waves, massive battle-hardened build, full heavy armor, imposing pose, crackling with elemental power, 2D game character art, digimon-inspired armored digital monster, cel-shaded with dramatic rim lighting, angular armor plates, glowing energy circuit lines, full body, centered, facing slightly left, isolated on plain solid white background, no text, no watermark, no ground shadow"
+  },
+  {
+    "file": "sea_dragon_baby.png",
+    "creature": "sea_dragon",
+    "phase": "baby",
+    "prompt": "baby sea dragon, small serpentine body, oversized head with big teal eyes, tiny fins, aqua-cyan scales with faint glowing water circuit lines, one small coral armor plate, chibi hatchling proportions, oversized head and eyes, tiny body, cute but fierce, minimal armor, 2D game character art, digimon-inspired armored digital monster, cel-shaded with dramatic rim lighting, angular armor plates, glowing energy circuit lines, full body, centered, facing slightly left, isolated on plain solid white background, no text, no watermark, no ground shadow"
+  },
+  {
+    "file": "sea_dragon_teen.png",
+    "creature": "sea_dragon",
+    "phase": "teen",
+    "prompt": "adolescent sea dragon, sleek serpentine build, teal and deep-blue scales, fin blades growing along its spine, aqua armor segments forming, glowing cyan circuits, water spiraling around its body, lean adolescent build, partial armor forming, energetic battle stance, 2D game character art, digimon-inspired armored digital monster, cel-shaded with dramatic rim lighting, angular armor plates, glowing energy circuit lines, full body, centered, facing slightly left, isolated on plain solid white background, no text, no watermark, no ground shadow"
+  },
+  {
+    "file": "sea_dragon_adult.png",
+    "creature": "sea_dragon",
+    "phase": "adult",
+    "prompt": "armored leviathan sea dragon, long powerful serpentine body in deep blue and teal, heavy coral-steel armor plates with glowing tide runes, blade fins, whirlpool energy core in its chest, commanding a wave, massive battle-hardened build, full heavy armor, imposing pose, crackling with elemental power, 2D game character art, digimon-inspired armored digital monster, cel-shaded with dramatic rim lighting, angular armor plates, glowing energy circuit lines, full body, centered, facing slightly left, isolated on plain solid white background, no text, no watermark, no ground shadow"
+  },
+  {
+    "file": "storm_shark_baby.png",
+    "creature": "storm_shark",
+    "phase": "baby",
+    "prompt": "baby shark, round torpedo body, oversized head with big electric-yellow eyes, tiny dorsal fin with one little lightning bolt spark, blue skin with faint yellow circuit lines, chibi hatchling proportions, oversized head and eyes, tiny body, cute but fierce, minimal armor, 2D game character art, digimon-inspired armored digital monster, cel-shaded with dramatic rim lighting, angular armor plates, glowing energy circuit lines, full body, centered, facing slightly left, isolated on plain solid white background, no text, no watermark, no ground shadow"
+  },
+  {
+    "file": "storm_shark_teen.png",
+    "creature": "storm_shark",
+    "phase": "teen",
+    "prompt": "adolescent storm shark, sleek hydrodynamic build, electric blue skin with yellow lightning circuit veins, angular armor forming on dorsal fin and snout, sparks arcing off its fins, lean adolescent build, partial armor forming, energetic battle stance, 2D game character art, digimon-inspired armored digital monster, cel-shaded with dramatic rim lighting, angular armor plates, glowing energy circuit lines, full body, centered, facing slightly left, isolated on plain solid white background, no text, no watermark, no ground shadow"
+  },
+  {
+    "file": "storm_shark_adult.png",
+    "creature": "storm_shark",
+    "phase": "adult",
+    "prompt": "armored thunder shark war beast, heavy storm-gray and electric-blue armor plating, giant blade dorsal fin channeling a lightning bolt, glowing yellow tesla core in its jaw armor, electricity arcing across its body, massive battle-hardened build, full heavy armor, imposing pose, crackling with elemental power, 2D game character art, digimon-inspired armored digital monster, cel-shaded with dramatic rim lighting, angular armor plates, glowing energy circuit lines, full body, centered, facing slightly left, isolated on plain solid white background, no text, no watermark, no ground shadow"
+  },
+  {
+    "file": "jellyfish_baby.png",
+    "creature": "jellyfish",
+    "phase": "baby",
+    "prompt": "baby jellyfish, small glowing translucent pink dome, huge cute glowing eyes inside the bell, short stubby tentacles, one tiny crystal armor ring around its dome, soft magenta light, chibi hatchling proportions, oversized head and eyes, tiny body, cute but fierce, minimal armor, 2D game character art, digimon-inspired armored digital monster, cel-shaded with dramatic rim lighting, angular armor plates, glowing energy circuit lines, full body, centered, facing slightly left, isolated on plain solid white background, no text, no watermark, no ground shadow"
+  },
+  {
+    "file": "jellyfish_teen.png",
+    "creature": "jellyfish",
+    "phase": "teen",
+    "prompt": "adolescent crystal jellyfish, elegant translucent magenta bell with glowing circuit filaments inside, crystal armor segments forming around the dome rim, long flowing luminous tentacles, lean adolescent build, partial armor forming, energetic battle stance, 2D game character art, digimon-inspired armored digital monster, cel-shaded with dramatic rim lighting, angular armor plates, glowing energy circuit lines, full body, centered, facing slightly left, isolated on plain solid white background, no text, no watermark, no ground shadow"
+  },
+  {
+    "file": "jellyfish_adult.png",
+    "creature": "jellyfish",
+    "phase": "adult",
+    "prompt": "armored crystal jellyfish deity, huge radiant magenta-and-violet bell crowned with prismatic crystal armor, blazing light core visible inside, dozens of flowing energy tentacles ending in crystal blades, aurora light rippling through its body, massive battle-hardened build, full heavy armor, imposing pose, crackling with elemental power, 2D game character art, digimon-inspired armored digital monster, cel-shaded with dramatic rim lighting, angular armor plates, glowing energy circuit lines, full body, centered, facing slightly left, isolated on plain solid white background, no text, no watermark, no ground shadow"
+  }
+]
