@@ -3,9 +3,9 @@
 // on the game's dark background, saved to art-review/<creature>.png.
 // Run after tools/generate-art.mjs. Requires playwright + chromium.
 
-import { readdirSync, mkdirSync, existsSync } from 'fs';
+import { readdirSync, mkdirSync, existsSync, readFileSync } from 'fs';
 import { dirname, join } from 'path';
-import { fileURLToPath, pathToFileURL } from 'url';
+import { fileURLToPath } from 'url';
 import { chromium } from 'playwright';
 
 const root = join(dirname(fileURLToPath(import.meta.url)), '..');
@@ -31,9 +31,9 @@ const page = await browser.newPage({ viewport: { width: 1020, height: 420 } });
 for (const c of creatures) {
   const cells = PHASES.map(p => {
     const f = join(artDir, `${c}_${p}.png`);
-    return existsSync(f)
-      ? `<div class="cell"><img src="${pathToFileURL(f)}"><span>${p}</span></div>`
-      : `<div class="cell missing"><span>${p}<br>(missing)</span></div>`;
+    if (!existsSync(f)) return `<div class="cell missing"><span>${p}<br>(missing)</span></div>`;
+    const b64 = readFileSync(f).toString('base64');
+    return `<div class="cell"><img src="data:image/png;base64,${b64}"><span>${p}</span></div>`;
   }).join('');
   await page.setContent(`
     <style>
