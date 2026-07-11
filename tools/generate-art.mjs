@@ -60,6 +60,11 @@ if (!queue.length) { console.log('Nothing to do.'); process.exit(0); }
 mkdirSync(outDir, { recursive: true });
 
 async function generateOpenAI(prompt) {
+  // The shared prompt text asks for a white background (for manual tools
+  // without transparency support) — that overrides the API's transparent
+  // background setting, so swap it out here.
+  prompt = prompt.replace(/isolated on plain solid white background/g,
+    'isolated subject on a fully transparent background, no backdrop, no glow behind the character');
   const res = await fetch('https://api.openai.com/v1/images/generations', {
     method: 'POST',
     headers: { Authorization: `Bearer ${openaiKey}`, 'Content-Type': 'application/json' },
