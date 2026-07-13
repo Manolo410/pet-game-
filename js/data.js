@@ -40,13 +40,14 @@ const CATEGORIES = [
 
 // ---- EVOLUTION STAGE RANGES ----
 const STAGES = [
-  { id:'baby',     name:'Baby',     min:1,  max:10,  scale:0.75 },
-  { id:'child',    name:'Child',    min:11, max:25,  scale:0.88 },
-  { id:'teen',     name:'Teen',     min:26, max:45,  scale:1.0  },
-  { id:'adult',    name:'Adult',    min:46, max:70,  scale:1.15 },
-  { id:'champion', name:'Champion', min:71, max:90,  scale:1.3  },
-  { id:'mythic',   name:'Mythic',   min:91, max:100, scale:1.5  }
+  { id:'baby',  name:'Baby',  min:1,  max:23,  scale:0.75 },
+  { id:'teen',  name:'Teen',  min:24, max:49,  scale:1.0  },
+  { id:'adult', name:'Adult', min:50, max:100, scale:1.3  }
 ];
+
+// Stage power: babies are weak (stats in the teens/20s), teens far
+// stronger, adults all-powerful. Applied to all combat stats.
+const STAGE_POWER = { baby: 0.3, teen: 0.65, adult: 1.2 };
 
 // ---- FULL CREATURE DATABASE ----
 const CREATURES = {
@@ -428,12 +429,13 @@ const PERSONALITIES = {
 
 // ---- XP TABLE ----
 function xpForLevel(level) {
-  return Math.floor(50 * Math.pow(level, 1.8));
+  // Near-linear: a few care actions or 2-4 battles per level at any band
+  return Math.floor(40 + level * 20);
 }
 
 // ---- STAGE FROM LEVEL ----
 function stageFromLevel(level) {
-  return STAGES.find(s => level >= s.min && level <= s.max) || STAGES[5];
+  return STAGES.find(s => level >= s.min && level <= s.max) || STAGES[STAGES.length - 1];
 }
 
 // ---- ELEMENTAL DAMAGE ----

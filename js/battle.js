@@ -14,12 +14,13 @@ const Battle = (() => {
     const def = CREATURES[creature.id];
     const pers = PERSONALITIES[creature.personality || def.personality];
     const stageDef = stageFromLevel(creature.level);
-    const statMult = 1 + (creature.level - 1) * 0.03;
+    // Babies are weak, teens strong, adults all-powerful
+    const statMult = (1 + (creature.level - 1) * 0.03) * (STAGE_POWER[stageDef.id] || 1);
 
-    let hp  = Math.floor((def.baseStats.maxHp  + (pers.bonuses.hp  || 0)) * statMult);
-    let atk = Math.floor((def.baseStats.atk    + (pers.bonuses.atk || 0)) * statMult);
-    let def_ = Math.floor((def.baseStats.def   + (pers.bonuses.def || 0)) * statMult);
-    let spd = Math.floor((def.baseStats.spd    + (pers.bonuses.spd || 0)) * statMult);
+    let hp  = Math.max(15, Math.floor((def.baseStats.maxHp  + (pers.bonuses.hp  || 0)) * statMult));
+    let atk = Math.max(8,  Math.floor((def.baseStats.atk    + (pers.bonuses.atk || 0)) * statMult));
+    let def_ = Math.max(8, Math.floor((def.baseStats.def    + (pers.bonuses.def || 0)) * statMult));
+    let spd = Math.max(8,  Math.floor((def.baseStats.spd    + (pers.bonuses.spd || 0)) * statMult));
 
     const careBonus = isPlayer ? Math.min(20, Math.floor((creature.trainingCount || 0) / 5)) : 0;
 

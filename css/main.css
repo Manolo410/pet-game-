@@ -841,7 +841,8 @@ html, body {
 .mini-game { background: var(--bg-card); border: 1px solid var(--border); border-radius: var(--radius); padding: 20px; text-align: center; }
 .mg-title  { font-size: 1.1rem; font-weight: 800; margin-bottom: 12px; color: var(--gold); }
 .mg-score  { font-size: 0.9rem; color: var(--text-dim); margin-bottom: 16px; }
-.mg-msg    { font-size: 0.9rem; color: var(--text); margin-top: 12px; min-height: 22px; }
+.mg-msg    { font-size: 1.05rem; font-weight: 800; color: var(--gold); margin-top: 12px; min-height: 26px;
+             text-shadow: 0 0 12px rgba(212,144,32,0.4); }
 
 /* Reflex game */
 .reflex-target {
@@ -1931,9 +1932,10 @@ html, body {
 /* State message */
 .incu-state-msg {
   text-align: center;
-  font-size: 0.9rem;
-  color: var(--text-dim);
-  font-style: italic;
+  font-size: 1.05rem;
+  font-weight: 800;
+  color: var(--text);
+  text-shadow: 0 0 14px rgba(212,144,32,0.35);
   padding: 8px 16px;
   margin-bottom: 16px;
 }
@@ -2054,11 +2056,11 @@ html, body {
   letter-spacing: 1px;
   pointer-events: none;
 }
-/* Temp scale: 0 = bottom. Sweet spot is 35-65 (matches JS). */
-.warm-hot   { top: 0;      height: 35%; background: rgba(200,48,48,0.14);  color: rgba(255,140,120,0.7); }
-.warm-sweet { top: 35%;    height: 30%; background: rgba(74,158,96,0.22);  color: rgba(140,230,170,0.9);
+/* Temp scale: 0 = bottom. Sweet spot is 40-62 (matches JS). */
+.warm-hot   { top: 0;      height: 38%; background: rgba(200,48,48,0.14);  color: rgba(255,140,120,0.7); }
+.warm-sweet { top: 38%;    height: 22%; background: rgba(74,158,96,0.22);  color: rgba(140,230,170,0.9);
               border-top: 2px dashed rgba(74,158,96,0.5); border-bottom: 2px dashed rgba(74,158,96,0.5); }
-.warm-cold  { bottom: 0;   height: 35%; background: rgba(80,140,220,0.12); color: rgba(140,180,255,0.7); }
+.warm-cold  { bottom: 0;   height: 40%; background: rgba(80,140,220,0.12); color: rgba(140,180,255,0.7); }
 .warm-indicator {
   position: absolute;
   left: 2px; right: 2px;
@@ -2088,12 +2090,12 @@ html, body {
   margin-bottom: 14px;
   overflow: hidden;
 }
-/* Perfect timing window is needle 35-65 (matches JS) */
+/* Perfect timing window is needle 40-60 (matches JS) */
 .rock-indicator-zone {
   position: absolute;
   top: 0; bottom: 0;
-  left: 35%;
-  width: 30%;
+  left: 40%;
+  width: 20%;
   background: rgba(74,158,96,0.18);
   border-left: 2px dashed rgba(74,158,96,0.45);
   border-right: 2px dashed rgba(74,158,96,0.45);
@@ -2643,4 +2645,178 @@ html, body {
 @keyframes sprite-breathe {
   0%, 100% { transform: scale(1) translateY(0); }
   50%      { transform: scale(1.03, 0.985) translateY(-2px); }
+}
+
+/* =====================================================
+   HYPE BANNERS — casino/CoD-style popping feedback
+   ===================================================== */
+.hype-banner {
+  position: fixed;
+  top: 34%;
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 500;
+  pointer-events: none;
+  --hype-color: #ffd700;
+}
+.hype-banner span {
+  display: block;
+  font-size: clamp(1.3rem, 7.5vw, 2.1rem);
+  max-width: 94vw;
+  font-weight: 900;
+  letter-spacing: 2px;
+  text-align: center;
+  white-space: nowrap;
+  color: var(--hype-color);
+  -webkit-text-stroke: 1.5px rgba(0,0,0,0.85);
+  text-shadow:
+    0 0 18px var(--hype-color),
+    0 0 45px var(--hype-color),
+    0 4px 10px rgba(0,0,0,0.9);
+  animation: hype-pop 1.5s cubic-bezier(0.2, 1.4, 0.4, 1) forwards;
+}
+.hype-banner.hype-small span { font-size: clamp(1rem, 5.5vw, 1.4rem); }
+@keyframes hype-pop {
+  0%   { transform: scale(0) rotate(-6deg);   opacity: 0; }
+  14%  { transform: scale(1.25) rotate(2deg); opacity: 1; }
+  24%  { transform: scale(1) rotate(0);       opacity: 1; }
+  75%  { transform: scale(1.04);              opacity: 1; }
+  100% { transform: scale(0.9) translateY(-22px); opacity: 0; }
+}
+.hype-spark {
+  position: absolute;
+  top: 50%; left: 50%;
+  width: 7px; height: 7px;
+  border-radius: 50%;
+  background: var(--hype-color);
+  box-shadow: 0 0 10px var(--hype-color);
+  animation: hype-spark-fly 0.9s ease-out forwards;
+}
+@keyframes hype-spark-fly {
+  0%   { transform: translate(0,0) scale(1);            opacity: 1; }
+  100% { transform: translate(var(--sx), var(--sy)) scale(0); opacity: 0; }
+}
+
+/* =====================================================
+   INSTRUCTIONS OVERLAY
+   ===================================================== */
+.instructions-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 400;
+  background: rgba(8,5,2,0.88);
+  backdrop-filter: blur(5px);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 24px;
+  animation: fadeIn 0.25s ease;
+}
+.instructions-box {
+  width: 100%;
+  max-width: 340px;
+  background: var(--bg-surface);
+  border: 1.5px solid var(--gold);
+  border-radius: var(--radius);
+  padding: 22px 20px 16px;
+  box-shadow: 0 0 40px rgba(212,144,32,0.25);
+  animation: hype-pop-in 0.35s cubic-bezier(0.2, 1.2, 0.4, 1.1);
+}
+@keyframes hype-pop-in {
+  from { transform: scale(0.7); opacity: 0; }
+  to   { transform: scale(1);   opacity: 1; }
+}
+.ib-title {
+  font-size: 1.3rem;
+  font-weight: 900;
+  color: var(--gold);
+  text-align: center;
+  margin-bottom: 14px;
+  letter-spacing: 0.5px;
+}
+.ib-lines {
+  list-style: none;
+  margin-bottom: 18px;
+  display: flex;
+  flex-direction: column;
+  gap: 9px;
+}
+.ib-lines li {
+  font-size: 0.92rem;
+  color: var(--text);
+  line-height: 1.45;
+  padding-left: 24px;
+  position: relative;
+}
+.ib-lines li::before {
+  content: '▸';
+  position: absolute;
+  left: 4px;
+  color: var(--gold);
+  font-weight: 900;
+}
+.ib-toggle {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  margin-top: 12px;
+  font-size: 0.78rem;
+  color: var(--text-dim);
+  cursor: pointer;
+}
+.ib-toggle input { accent-color: var(--gold); width: 16px; height: 16px; }
+
+/* =====================================================
+   HATCH CELEBRATION — flash, rays, confetti
+   ===================================================== */
+.hatch-flash {
+  position: absolute;
+  inset: 0;
+  z-index: 30;
+  background: radial-gradient(circle, rgba(255,250,220,0.98) 0%, rgba(255,220,120,0.75) 45%, transparent 75%);
+  pointer-events: none;
+  animation: hatch-flash-out 0.9s ease-out forwards;
+}
+@keyframes hatch-flash-out {
+  0%   { opacity: 1; }
+  100% { opacity: 0; }
+}
+.hatch-rays {
+  position: absolute;
+  top: 50%; left: 50%;
+  width: 480px; height: 480px;
+  transform: translate(-50%, -50%);
+  z-index: 0;
+  pointer-events: none;
+  --ray-color: rgba(255,200,80,0.5);
+  background: repeating-conic-gradient(
+    var(--ray-color) 0deg 9deg,
+    transparent 9deg 30deg
+  );
+  -webkit-mask-image: radial-gradient(circle, black 0%, transparent 68%);
+  mask-image: radial-gradient(circle, black 0%, transparent 68%);
+  animation: rays-spin 14s linear infinite, fadeIn 1.2s ease;
+  opacity: 0.85;
+}
+@keyframes rays-spin { to { transform: translate(-50%, -50%) rotate(360deg); } }
+.confetti {
+  position: absolute;
+  top: -18px;
+  z-index: 40;
+  border-radius: 2px;
+  pointer-events: none;
+  animation: confetti-fall linear forwards;
+}
+@keyframes confetti-fall {
+  0%   { transform: translateY(0) rotate(0) scaleY(1);        opacity: 1; }
+  70%  { opacity: 1; }
+  100% { transform: translateY(105vh) rotate(660deg) scaleY(0.6); opacity: 0; }
+}
+
+/* Category cards with real character art */
+.cat-art {
+  display: flex;
+  justify-content: center;
+  margin-bottom: 8px;
 }
