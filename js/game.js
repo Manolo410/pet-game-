@@ -102,6 +102,17 @@ function loadGame() {
     G.collection = data.collection || [];
     G.inventory = data.inventory || ['basic_meat','bandage'];
     G.incubation = data.incubation || null;
+    // Migrate incubation saved by the old timer-based system (no bond field)
+    if (G.incubation && typeof G.incubation.bond !== 'number') {
+      G.incubation = {
+        creatureId: G.incubation.creatureId,
+        creatureName: G.incubation.creatureName,
+        bond: 0,
+        stats: { warmth: 0, comfort: 0, energy: 0, stability: 0, bond: 0 },
+        careActions: [],
+        crackStage: 0
+      };
+    }
     G.campaign = data.campaign || { progress: 1, stars: {} };
     G.daily = data.daily || { last: null, streak: 0 };
     return true;
