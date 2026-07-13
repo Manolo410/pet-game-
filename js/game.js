@@ -22,10 +22,17 @@ let G = {
   campaign: { progress: 1, stars: {} },
   battleMode: null,
   daily: { last: null, streak: 0 },
+  settings: { instructions: true },
   inventory: ['basic_meat','basic_meat','sweet_fruit','bandage','focus_berry'],
   notifications: [],
   careActionCooldown: {}
 };
+
+// Stage-scaled max HP: hatchlings are fragile, adults are tanks
+function scaledMaxHp(def, level) {
+  const power = STAGE_POWER[stageFromLevel(level).id] || 1;
+  return Math.max(20, Math.floor(def.baseStats.maxHp * power * (1 + (level - 1) * 0.03)));
+}
 
 // ---- Creature Template ----
 function createCreature(id, name) {
@@ -42,12 +49,13 @@ function createCreature(id, name) {
     nature: rollNature(),
     ivs: rollIVs(),
     trainedStats: { atk: 0, def: 0, spd: 0, hp: 0 },
-    hunger: 80,
-    hygiene: 80,
-    happiness: 80,
-    energy: 80,
-    hp: def.baseStats.maxHp,
-    maxHp: def.baseStats.maxHp,
+    // Varied starting vitals so the bars never sit at a flat 80%
+    hunger:    55 + Math.floor(Math.random() * 25),
+    hygiene:   60 + Math.floor(Math.random() * 25),
+    happiness: 65 + Math.floor(Math.random() * 25),
+    energy:    70 + Math.floor(Math.random() * 25),
+    hp: scaledMaxHp(def, 1),
+    maxHp: scaledMaxHp(def, 1),
     trainingCount: 0,
     battleCount: 0,
     affectionCount: 0,
@@ -87,7 +95,8 @@ function saveGame() {
     inventory: G.inventory,
     incubation: G.incubation,
     campaign: G.campaign,
-    daily: G.daily
+    daily: G.daily,
+    settings: G.settings
   };
   localStorage.setItem('hatchbound_save', JSON.stringify(data));
 }
@@ -115,6 +124,7 @@ function loadGame() {
     }
     G.campaign = data.campaign || { progress: 1, stars: {} };
     G.daily = data.daily || { last: null, streak: 0 };
+    G.settings = data.settings || { instructions: true };
     return true;
   } catch { return false; }
 }
@@ -129,7 +139,7 @@ function grantXP(amount) {
     G.creature.level++;
     leveled = true;
     const def = CREATURES[G.creature.id];
-    G.creature.maxHp = Math.floor(def.baseStats.maxHp * (1 + (G.creature.level - 1) * 0.03));
+    G.creature.maxHp = scaledMaxHp(def, G.creature.level);
     G.creature.hp = Math.min(G.creature.hp + 20, G.creature.maxHp);
     const newStage = stageFromLevel(G.creature.level);
     if (newStage.id !== G.creature.stage) {
@@ -235,7 +245,7 @@ function drainStats() {
   if (!G.creature) return;
   const c = G.creature;
   const elapsed = (Date.now() - (c.lastCareTime || Date.now())) / 1000 / 60; // minutes
-  const rate = 2 * (elapsed / 10);
+  const rate = 2 * (elapsed / 3); // ~2 pts every 3 minutes of neglect
   c.hunger    = Math.max(0, c.hunger    - rate);
   c.hygiene   = Math.max(0, c.hygiene   - rate * 0.8);
   c.happiness = Math.max(0, c.happiness - rate * 0.6);
@@ -253,6 +263,7 @@ function startIncubation(creatureId, creatureName) {
     careActions: [],
     crackStage: 0       // visual crack progress 0-4
   };
+  lastHypeBondTier = 0;
   saveGame();
 }
 
@@ -404,8 +415,25 @@ function incuGameActive(token) {
   return token === incuGameToken && G.screen === 'incubation';
 }
 
+
+// Big end-of-game reaction scaled to performance
+function gameEndHype(ratio) {
+  if (ratio >= 0.75)      hype('AMAZING WORK!', '#ffd700');
+  else if (ratio >= 0.45) hype('GREAT JOB!', '#60d080');
+  else                    hype('GOOD EFFORT!', null, true);
+}
+
 // ---- Incubation Mini-Game: Warm the Egg ----
 function startWarmGame() {
+  showInstructions('runWarmGame', 'Warm the Egg', [
+    'Tap <b>Add Heat</b> to raise the temperature',
+    'Keep the needle inside the green PERFECT zone',
+    'Heat drains fast — and watch out for cold gusts!',
+    'More time in the zone = more bond'
+  ], runWarmGame);
+}
+
+function runWarmGame() {
   const incu = G.incubation;
   if (!incu) return;
 
@@ -444,17 +472,17 @@ function startWarmGame() {
   const heatBtn = document.getElementById('wg-heat-btn');
 
   // Heating on press
-  heatBtn.addEventListener('mousedown', () => { if (!gameOver) { temp = Math.min(100, temp + 8); SFX.tap(); } });
-  heatBtn.addEventListener('touchstart', (e) => { e.preventDefault(); if (!gameOver) { temp = Math.min(100, temp + 8); SFX.tap(); } });
+  heatBtn.addEventListener('mousedown', () => { if (!gameOver) { temp = Math.min(100, temp + 7); SFX.tap(); } });
+  heatBtn.addEventListener('touchstart', (e) => { e.preventDefault(); if (!gameOver) { temp = Math.min(100, temp + 7); SFX.tap(); } });
 
   const gameLoop = setInterval(() => {
     if (gameOver || !incuGameActive(token)) { clearInterval(gameLoop); return; }
 
     // Temperature drifts down naturally
-    temp = Math.max(0, temp - 1.5);
+    temp = Math.max(0, temp - (2.2 + (Math.random() < 0.05 ? 9 : 0))); // cold gusts!
 
     // Check if in sweet spot (35-65)
-    const inZone = temp >= 35 && temp <= 65;
+    const inZone = temp >= 40 && temp <= 62;
     if (inZone) timeInZone += 0.1;
 
     // Update indicator position (0=bottom, 100=top)
@@ -466,7 +494,8 @@ function startWarmGame() {
     if (inZone) {
       if (msgEl) msgEl.textContent = 'In the sweet spot!';
       if (msgEl) msgEl.style.color = '#10b981';
-    } else if (temp < 35) {
+      if (timeInZone > 4.9 && timeInZone < 5.1) hypePraise();
+    } else if (temp < 40) {
       if (msgEl) msgEl.textContent = 'Too cold! Add heat!';
       if (msgEl) msgEl.style.color = '#60a5fa';
     } else {
@@ -480,6 +509,7 @@ function startWarmGame() {
       clearInterval(gameLoop);
       // Calculate bond reward: 8-15 based on time in zone (max 15s)
       const ratio = Math.min(1, timeInZone / 10);
+      gameEndHype(ratio);
       const bondGain = Math.floor(8 + ratio * 7);
       incu.bond = Math.min(BOND_THRESHOLD + 10, incu.bond + bondGain);
       incu.stats.warmth = Math.min(100, incu.stats.warmth + bondGain);
@@ -499,6 +529,14 @@ function startWarmGame() {
 
 // ---- Incubation Mini-Game: Rock the Egg ----
 function startRockGame() {
+  showInstructions('runRockGame', 'Rock the Egg', [
+    'Tap <b>Left</b> and <b>Right</b>, alternating',
+    'Time your taps for when the needle is in the green zone',
+    'Perfect-timed rocks earn much more bond'
+  ], runRockGame);
+}
+
+function runRockGame() {
   const incu = G.incubation;
   if (!incu) return;
 
@@ -550,7 +588,7 @@ function startRockGame() {
   // Needle swings back and forth - press at the right time!
   const needleLoop = setInterval(() => {
     if (gameOver || !incuGameActive(token)) { clearInterval(needleLoop); return; }
-    needlePos += needleDir * 2.5;
+    needlePos += needleDir * 3.4;
     if (needlePos >= 100) { needlePos = 100; needleDir = -1; }
     if (needlePos <= 0) { needlePos = 0; needleDir = 1; }
     if (needleEl) needleEl.style.left = needlePos + '%';
@@ -567,11 +605,12 @@ function startRockGame() {
     expectLeft = !expectLeft;
 
     // Check timing (needle in zone 35-65 = perfect)
-    const perfect = needlePos >= 35 && needlePos <= 65;
+    const perfect = needlePos >= 40 && needlePos <= 60;
     if (perfect) {
       perfectRocks++;
       SFX.good();
       if (msgEl) msgEl.textContent = 'Perfect rock!';
+      if (perfectRocks === 3) hype('PERFECT STREAK!', '#ffd700', true);
     } else {
       SFX.tap();
       if (msgEl) msgEl.textContent = 'Good rock!';
@@ -599,6 +638,7 @@ function startRockGame() {
       gameOver = true;
       clearInterval(needleLoop);
       const ratio = perfectRocks / totalRocks;
+      gameEndHype(ratio);
       const bondGain = Math.floor(8 + ratio * 7);
       incu.bond = Math.min(BOND_THRESHOLD + 10, incu.bond + bondGain);
       incu.stats.comfort = Math.min(100, incu.stats.comfort + bondGain);
@@ -618,6 +658,14 @@ function startRockGame() {
 
 // ---- Incubation Mini-Game: Sing to It (Simon Says) ----
 function startSingGame() {
+  showInstructions('runSingGame', 'Sing to the Egg', [
+    'Watch the colored pads light up and play notes',
+    'Repeat the pattern by tapping the pads in order',
+    'Each round adds a note and gets faster!'
+  ], runSingGame);
+}
+
+function runSingGame() {
   const incu = G.incubation;
   if (!incu) return;
 
@@ -651,9 +699,8 @@ function startSingGame() {
 
   let sequence = [];
   let playerIdx = 0;
-  let seqLength = 3;
   let totalBond = 0;
-  let maxRounds = 4;
+  let maxRounds = 5;
   let roundNum = 0;
   let accepting = false;
 
@@ -661,7 +708,8 @@ function startSingGame() {
   const seqEl = document.getElementById('sg-seq');
   const bondEl = document.getElementById('sg-bond');
 
-  function flashButton(idx, duration = 400) {
+  function flashButton(idx, duration) {
+    duration = duration || Math.max(220, 380 - roundNum * 30); // faster each round
     return new Promise(resolve => {
       const btn = document.getElementById(`sg-btn-${idx}`);
       SFX.note(idx);
@@ -694,14 +742,16 @@ function startSingGame() {
       finishSingGame();
       return;
     }
-    // Add a random note to the sequence
+    // Add a random note (two on the first round)
     sequence.push(Math.floor(Math.random() * 4));
+    if (roundNum === 1) sequence.push(Math.floor(Math.random() * 4));
     if (seqEl) seqEl.textContent = sequence.length;
     playSequence();
   }
 
   function finishSingGame() {
     if (!incuGameActive(token)) return;
+    gameEndHype(totalBond / 20);
     incu.bond = Math.min(BOND_THRESHOLD + 10, incu.bond + totalBond);
     incu.stats.energy = Math.min(100, incu.stats.energy + totalBond);
     incu.crackStage = Math.floor(incu.bond / 25);
@@ -729,10 +779,11 @@ function startSingGame() {
       playerIdx++;
       if (playerIdx >= sequence.length) {
         // Correct sequence!
-        totalBond += 5;
+        totalBond += 4;
         if (bondEl) bondEl.textContent = totalBond;
         accepting = false;
-        if (msgEl) msgEl.textContent = 'Correct! +5 bond';
+        if (msgEl) msgEl.textContent = 'Correct!';
+        if (roundNum === 3) hype('INCREDIBLE MEMORY!', '#c084fc', true);
         setTimeout(() => nextRound(), 800);
       }
     } else {
@@ -750,6 +801,14 @@ function startSingGame() {
 
 // ---- Incubation Mini-Game: Shield the Egg ----
 function startShieldGame() {
+  showInstructions('runShieldGame', 'Shield the Egg', [
+    'Threats fly in from every side toward your egg',
+    'Tap them before they reach the center!',
+    'Every hit on the egg costs you bond'
+  ], runShieldGame);
+}
+
+function runShieldGame() {
   const incu = G.incubation;
   if (!incu) return;
 
@@ -761,7 +820,7 @@ function startShieldGame() {
     <div class="mini-game shield-game">
       <div class="mg-title">Shield the Egg</div>
       <div class="mg-subtitle">Tap threats before they reach the egg!</div>
-      <div class="mg-score">Time: <span id="shg-time">12</span>s &nbsp; Blocked: <span id="shg-blocked">0</span> &nbsp; Hit: <span id="shg-hit">0</span></div>
+      <div class="mg-score">Time: <span id="shg-time">14</span>s &nbsp; Blocked: <span id="shg-blocked">0</span> &nbsp; Hit: <span id="shg-hit">0</span></div>
       <div class="shield-arena" id="shg-arena">
         <div class="shield-egg-center">
           <svg viewBox="0 0 60 80" width="50" height="66">
@@ -774,7 +833,7 @@ function startShieldGame() {
     </div>
   `;
 
-  let timeLeft = 12;
+  let timeLeft = 14;
   let blocked = 0;
   let hit = 0;
   let gameOver = false;
@@ -820,7 +879,7 @@ function startShieldGame() {
     const dx = centerX - startX;
     const dy = centerY - startY;
     const dist = Math.sqrt(dx * dx + dy * dy);
-    const speed = 1.2 + Math.random() * 0.8; // px per frame
+    const speed = 1.6 + Math.random() * 1.2; // px per frame
     const vx = (dx / dist) * speed;
     const vy = (dy / dist) * speed;
 
@@ -834,6 +893,7 @@ function startShieldGame() {
       SFX.block();
       threat.classList.add('threat-blocked');
       blocked++;
+      if (blocked === 6) hype('SHIELD MASTER!', '#60a5fa', true);
       if (blockedEl) blockedEl.textContent = blocked;
       setTimeout(() => threat.remove(), 300);
     });
@@ -880,7 +940,7 @@ function startShieldGame() {
   spawnInterval = setInterval(() => {
     if (gameOver || !incuGameActive(token)) { clearInterval(spawnInterval); return; }
     spawnThreat();
-  }, 800 + Math.random() * 400);
+  }, 550 + Math.random() * 300);
 
   // Timer countdown
   const timerLoop = setInterval(() => {
@@ -911,6 +971,7 @@ function startShieldGame() {
     const netBlocked = Math.max(0, blocked - hit);
     const maxPossible = Math.max(1, blocked + hit);
     const ratio = netBlocked / maxPossible;
+    gameEndHype(ratio);
     const bondGain = Math.floor(8 + ratio * 7);
     incu.bond = Math.min(BOND_THRESHOLD + 10, incu.bond + bondGain);
     incu.stats.stability = Math.min(100, incu.stats.stability + bondGain);
@@ -937,6 +998,7 @@ function renderIncubation() {
 
   const stateMsg = getEggStateMessage(bond);
   const readyToHatch = bond >= BOND_THRESHOLD;
+  eggHypeCheck(bond);
 
   el.innerHTML = `
     <div class="incu-header">
@@ -989,6 +1051,37 @@ function renderIncubation() {
   `;
 }
 
+// ---- Hatch celebration: screen flash, light rays, confetti storm ----
+function hatchCelebration(def) {
+  const screen = document.getElementById('screen-hatching');
+  const container = document.getElementById('hatch-container');
+  if (!screen || !container) return;
+
+  const flash = document.createElement('div');
+  flash.className = 'hatch-flash';
+  screen.appendChild(flash);
+  setTimeout(() => flash.remove(), 900);
+
+  const rays = document.createElement('div');
+  rays.className = 'hatch-rays';
+  rays.style.setProperty('--ray-color', def.glow);
+  container.prepend(rays);
+  setTimeout(() => rays.remove(), 6000);
+
+  const colors = [def.color, '#ffd700', '#ff6b9d', '#60d080', '#60a5fa', '#c084fc', '#fff'];
+  for (let i = 0; i < 50; i++) {
+    const c = document.createElement('i');
+    c.className = 'confetti';
+    c.style.left = Math.random() * 100 + '%';
+    c.style.background = colors[Math.floor(Math.random() * colors.length)];
+    c.style.animationDelay = (Math.random() * 0.9) + 's';
+    c.style.animationDuration = (1.6 + Math.random() * 1.6) + 's';
+    c.style.width = c.style.height = (5 + Math.random() * 7) + 'px';
+    screen.appendChild(c);
+    setTimeout(() => c.remove(), 3600);
+  }
+}
+
 // ---- Screen Router ----
 function showScreen(id, data = {}) {
   G.screen = id;
@@ -1028,8 +1121,11 @@ const SCREENS = {
       const card = document.createElement('div');
       card.className = 'cat-card';
       card.style.setProperty('--cat-color', cat.color);
+      const CATEGORY_ART = { reptilian: 'komodo', mammal: 'fire_lion', flying: 'eagle', aquatic: 'sea_dragon' };
       card.innerHTML = `
-        <div class="cat-icon">${cat.icon}</div>
+        <div class="cat-art" style="filter:drop-shadow(0 0 14px ${cat.color})">
+          ${getSpriteHTML(CATEGORY_ART[cat.id], 'adult', 104)}
+        </div>
         <div class="cat-name">${cat.name}</div>
         <div class="cat-desc">${cat.desc}</div>
         <div class="cat-element">
@@ -1151,6 +1247,8 @@ const SCREENS = {
       if (egg) egg.style.display = 'none';
       if (creature) creature.classList.remove('hidden');
       SFX.hatch();
+      hatchCelebration(def);
+      setTimeout(() => hype(`${G.creature.name} IS BORN!`, def.color), 700);
     }, 2500);
     setTimeout(() => {
       const bonusEl = document.getElementById('hatch-bonuses');
@@ -1221,6 +1319,72 @@ function checkDailyStreak() {
     SFX.coin();
     showToast(`🔥 Day ${G.daily.streak} streak! +${reward} coins!`, 4000);
   }, 1200);
+}
+
+// ---- HYPE BANNERS — big flashy popping feedback (casino/CoD style) ----
+const HYPE_PRAISE = ['GREAT WORK!', 'KEEP IT UP!', 'AWESOME!', 'ON FIRE!', 'CRUSHING IT!'];
+function hype(text, color, small) {
+  const el = document.createElement('div');
+  el.className = 'hype-banner' + (small ? ' hype-small' : '');
+  el.innerHTML = `<span>${text}</span>`;
+  if (color) el.style.setProperty('--hype-color', color);
+  // sparkle burst around the text
+  for (let i = 0; i < 8; i++) {
+    const s = document.createElement('i');
+    s.className = 'hype-spark';
+    s.style.setProperty('--sx', (Math.random() * 240 - 120) + 'px');
+    s.style.setProperty('--sy', (Math.random() * 160 - 80) + 'px');
+    s.style.animationDelay = (Math.random() * 0.2) + 's';
+    el.appendChild(s);
+  }
+  document.body.appendChild(el);
+  setTimeout(() => el.remove(), 1500);
+  if (!small) SFX.levelup(); else SFX.good();
+}
+function hypePraise() { hype(HYPE_PRAISE[Math.floor(Math.random() * HYPE_PRAISE.length)], null, true); }
+
+// Anticipation banners as the egg's hidden bond crosses milestones
+let lastHypeBondTier = 0;
+function eggHypeCheck(bond) {
+  const tiers = [
+    [95, 'THE EGG IS ABOUT TO HATCH!', '#ffd700'],
+    [80, 'IT WANTS TO MEET YOU!', '#ff9040'],
+    [60, "YOU'RE ALMOST THERE!", '#ff9040'],
+    [40, "IT'S GETTING STRONGER!", '#60d080'],
+    [20, 'SOMETHING IS STIRRING...', '#80b0ff']
+  ];
+  for (const [t, msg, col] of tiers) {
+    if (bond >= t && lastHypeBondTier < t) {
+      lastHypeBondTier = t;
+      setTimeout(() => hype(msg, col), 600);
+      return;
+    }
+  }
+}
+
+// ---- Pre-game instructions (toggleable in-overlay) ----
+function showInstructions(key, title, lines, onStart) {
+  if (!G.settings || G.settings.instructions === false) { onStart(); return; }
+  const ov = document.createElement('div');
+  ov.className = 'instructions-overlay';
+  ov.innerHTML = `
+    <div class="instructions-box">
+      <div class="ib-title">${title}</div>
+      <ul class="ib-lines">${lines.map(l => `<li>${l}</li>`).join('')}</ul>
+      <button class="btn-primary ib-start">Let's Go!</button>
+      <label class="ib-toggle"><input type="checkbox" id="ib-hide-check"> Don't show instructions again</label>
+    </div>`;
+  ov.querySelector('.ib-start').addEventListener('click', () => {
+    if (ov.querySelector('#ib-hide-check').checked) {
+      G.settings.instructions = false;
+      saveGame();
+      showToast('Instructions off — re-enable any time by holding the game card');
+    }
+    ov.remove();
+    SFX.good();
+    onStart();
+  });
+  document.body.appendChild(ov);
 }
 
 // ---- Liveliness helpers ----
@@ -1459,6 +1623,7 @@ function doAction(action) {
   if (action === 'feed') SFX.munch();
   else if (action === 'bathe') SFX.splash();
   else if (action === 'sleep') SFX.good();
+  if (Math.random() < 0.25) hypePraise();
 
   // Feed animation: show food flying to creature
   if (action === 'feed' && sprite) {
@@ -1638,15 +1803,23 @@ function renderTrainScreen() {
   `;
 }
 
-function startTrainingGame(type) {
-  const area = document.getElementById('training-game-area');
-  if (!area) return;
-  area.classList.remove('hidden');
-  area.innerHTML = '';
+const TRAIN_INSTRUCTIONS = {
+  reflex: ['Reflex Strike', ['Wait for the circle to flash', 'Tap it the INSTANT it lights up', 'The window is short — stay sharp!', 'Builds SPD and ATK permanently']],
+  endurance: ['Endurance Burn', ['Press and HOLD the button', 'Hold as long as you can — up to 30 seconds', 'Letting go ends the session', 'Builds HP and DEF permanently']],
+  focus: ['Focus Target', ['Targets appear and vanish quickly', 'Tap them before they disappear', 'They get faster — stay locked in!', 'Builds ATK and SPD permanently']]
+};
 
-  if (type === 'reflex') startReflexGame(area);
-  else if (type === 'endurance') startEnduranceGame(area);
-  else if (type === 'focus') startFocusGame(area);
+function startTrainingGame(type) {
+  const [title, lines] = TRAIN_INSTRUCTIONS[type] || ['Training', []];
+  showInstructions(type, title, lines, () => {
+    const area = document.getElementById('training-game-area');
+    if (!area) return;
+    area.classList.remove('hidden');
+    area.innerHTML = '';
+    if (type === 'reflex') startReflexGame(area);
+    else if (type === 'endurance') startEnduranceGame(area);
+    else if (type === 'focus') startFocusGame(area);
+  });
 }
 
 function startReflexGame(area) {
@@ -1681,7 +1854,7 @@ function startReflexGame(area) {
           document.getElementById('rg-msg').textContent = 'Too slow!';
           nextFlash();
         }
-      }, 900);
+      }, 650);
 
       btn.onclick = () => {
         if (!flashing) return;
@@ -1722,7 +1895,7 @@ function startEnduranceGame(area) {
       xpGained += 5;
       document.getElementById('eg-sec').textContent = seconds;
       document.getElementById('eg-xp').textContent  = xpGained;
-      if (seconds >= 20) { stop(); endMiniGame('endurance', xpGained); }
+      if (seconds >= 30) { stop(); endMiniGame('endurance', xpGained); }
     }, 1000);
   };
   const stop = () => {
@@ -1768,7 +1941,7 @@ function startFocusGame(area) {
       if (target.parentNode) target.remove();
       document.getElementById('fg-msg').textContent = 'Missed!';
       spawnTarget();
-    }, 1200);
+    }, 850);
 
     target.addEventListener('click', () => {
       clearTimeout(to);
@@ -1819,6 +1992,7 @@ function endMiniGame(type, xpGained) {
 
   grantXP(xpGained);
   saveGame();
+  if (cfg) gameEndHype(xpGained > 0 ? Math.min(1, xpGained / cfg.maxScore) : 0);
   showToast(`Training complete! +${xpGained} XP!${gainMsg}`, 3200);
   setTimeout(() => { renderHome(); showScreen('home'); }, 1600);
 }
@@ -2208,9 +2382,9 @@ function renderProfile() {
       <div class="profile-card">
         <div class="pc-title">Battle Stats</div>
         <div class="pc-row"><span>HP</span><b>${c.hp} / ${c.maxHp}</b></div>
-        <div class="pc-row"><span>Attack</span><b>${Math.floor(def.baseStats.atk * (1+(c.level-1)*0.03))}${c.trainedStats && c.trainedStats.atk ? ` <i class="trained-plus">+${c.trainedStats.atk}</i>` : ''}</b></div>
-        <div class="pc-row"><span>Defense</span><b>${Math.floor(def.baseStats.def * (1+(c.level-1)*0.03))}${c.trainedStats && c.trainedStats.def ? ` <i class="trained-plus">+${c.trainedStats.def}</i>` : ''}</b></div>
-        <div class="pc-row"><span>Speed</span><b>${Math.floor(def.baseStats.spd * (1+(c.level-1)*0.03))}${c.trainedStats && c.trainedStats.spd ? ` <i class="trained-plus">+${c.trainedStats.spd}</i>` : ''}</b></div>
+        <div class="pc-row"><span>Attack</span><b>${Math.floor(def.baseStats.atk * (STAGE_POWER[stageDef.id]||1) * (1+(c.level-1)*0.03))}${c.trainedStats && c.trainedStats.atk ? ` <i class="trained-plus">+${c.trainedStats.atk}</i>` : ''}</b></div>
+        <div class="pc-row"><span>Defense</span><b>${Math.floor(def.baseStats.def * (STAGE_POWER[stageDef.id]||1) * (1+(c.level-1)*0.03))}${c.trainedStats && c.trainedStats.def ? ` <i class="trained-plus">+${c.trainedStats.def}</i>` : ''}</b></div>
+        <div class="pc-row"><span>Speed</span><b>${Math.floor(def.baseStats.spd * (STAGE_POWER[stageDef.id]||1) * (1+(c.level-1)*0.03))}${c.trainedStats && c.trainedStats.spd ? ` <i class="trained-plus">+${c.trainedStats.spd}</i>` : ''}</b></div>
         ${c.nature && NATURES[c.nature] ? `<div class="pc-row"><span>Nature</span><b>${NATURES[c.nature].icon} ${NATURES[c.nature].name}</b></div>` : ''}
       </div>
       <div class="profile-card">
@@ -2614,6 +2788,10 @@ window.addEventListener('DOMContentLoaded', () => {
       showScreen(e.target.dataset.back);
     }
   });
+
+  // Progress always saved: also flush when the tab hides or closes
+  window.addEventListener('beforeunload', () => { try { saveGame(); } catch {} });
+  document.addEventListener('visibilitychange', () => { if (document.hidden) { try { saveGame(); } catch {} } });
 
   showScreen('title');
 });
