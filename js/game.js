@@ -1116,6 +1116,7 @@ const SCREENS = {
     const cont = document.getElementById('btn-continue');
     if (cont) cont.style.display = hasSave ? 'block' : 'none';
     startParticles();
+    startTitleParade();
   },
 
   'choose-category'() {
@@ -2740,6 +2741,59 @@ function vitalBar(icon, label, val) {
   `;
 }
 
+// ---- Title Creature Parade ----
+// The roster drifts slowly across the title screen at varying depths so
+// the art is showcased without competing with the logo.
+function startTitleParade() {
+  const host = document.getElementById('title-parade');
+  if (!host || host.dataset.built === '1') return;
+  if (window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches) return;
+
+  const ids = Object.keys(CREATURES);
+  // Shuffle so the order differs each visit
+  for (let i = ids.length - 1; i > 0; i--) {
+    const j = Math.floor(Math.random() * (i + 1));
+    [ids[i], ids[j]] = [ids[j], ids[i]];
+  }
+
+  // Three depth layers: far ones are small, dim and slow; near ones large and
+  // brighter. Depth comes from size + opacity only — CSS filters on a
+  // continuously transformed element force a re-raster every frame.
+  const LAYERS = [
+    { size: 84,  opacity: 0.62, dur: [78, 96], top: [4, 26] },
+    { size: 116, opacity: 0.82, dur: [62, 78], top: [24, 56] },
+    { size: 152, opacity: 1.00, dur: [48, 62], top: [52, 84] }
+  ];
+  const rand = (a, b) => a + Math.random() * (b - a);
+
+  ids.forEach((id, i) => {
+    const layer = LAYERS[i % LAYERS.length];
+    const def = CREATURES[id];
+    const rightward = i % 2 === 0;
+    const dur = rand(layer.dur[0], layer.dur[1]);
+
+    const el = document.createElement('div');
+    el.className = 'parade-creature ' + (rightward ? 'parade-rtl' : 'parade-ltr');
+    el.style.top = rand(layer.top[0], layer.top[1]) + '%';
+    el.style.opacity = layer.opacity;
+    // A soft radial glow behind the sprite reads like the drop-shadow but
+    // composites for free instead of re-filtering every frame.
+    el.style.setProperty('--parade-glow', def.glow);
+    el.style.animationDuration = dur + 's';
+    // Negative delay starts each one mid-journey, so the screen is alive instantly
+    el.style.animationDelay = '-' + (dur * (i / ids.length)) + 's';
+
+    const inner = document.createElement('div');
+    inner.className = 'parade-bob';
+    inner.style.animationDuration = rand(4.5, 7.5) + 's';
+    inner.innerHTML = getSpriteHTML(id, 'adult', layer.size);
+    el.appendChild(inner);
+    host.appendChild(el);
+  });
+
+  host.dataset.built = '1';
+}
+
 // ---- Particle Background ----
 function startParticles() {
   const canvas = document.getElementById('title-particles');
@@ -2785,8 +2839,12 @@ window.addEventListener('DOMContentLoaded', () => {
   loadGame();
   checkDailyStreak();
   detectCustomSprites(found => {
-    // Custom art arrived after first paint — refresh the current screen
-    if (found && G.screen !== 'hatching' && G.screen !== 'battle') showScreen(G.screen);
+    if (!found) return;
+    // Custom art arrived after first paint — drop the parade built from the
+    // fallback SVGs so it re-renders with the real images, then repaint.
+    const parade = document.getElementById('title-parade');
+    if (parade) { parade.innerHTML = ''; delete parade.dataset.built; }
+    if (G.screen !== 'hatching' && G.screen !== 'battle') showScreen(G.screen);
   });
 
   // Title buttons
