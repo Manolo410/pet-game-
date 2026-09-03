@@ -1085,10 +1085,15 @@ function hatchCelebration(def) {
 // ---- Screen Router ----
 function showScreen(id, data = {}) {
   G.screen = id;
+  if (typeof FX !== 'undefined') FX.setTheme(id);
   document.querySelectorAll('.screen').forEach(s => s.classList.remove('active'));
   const target = document.getElementById('screen-' + id);
   if (target) {
     target.classList.add('active');
+    // Restart the entrance animation on every navigation
+    target.classList.remove('screen-enter');
+    void target.offsetWidth;
+    target.classList.add('screen-enter');
     const fn = SCREENS[id];
     if (fn) fn(data);
   }
@@ -1247,6 +1252,7 @@ const SCREENS = {
       if (egg) egg.style.display = 'none';
       if (creature) creature.classList.remove('hidden');
       SFX.hatch();
+      if (typeof FX !== 'undefined') { FX.flash('rgba(255,250,220,0.85)', 700); FX.shake(12); }
       hatchCelebration(def);
       setTimeout(() => hype(`${G.creature.name} IS BORN!`, def.color), 700);
     }, 2500);
@@ -1339,7 +1345,10 @@ function hype(text, color, small) {
   }
   document.body.appendChild(el);
   setTimeout(() => el.remove(), 1500);
-  if (!small) SFX.levelup(); else SFX.good();
+  if (!small) {
+    SFX.levelup();
+    if (typeof FX !== 'undefined') FX.shake(5);
+  } else SFX.good();
 }
 function hypePraise() { hype(HYPE_PRAISE[Math.floor(Math.random() * HYPE_PRAISE.length)], null, true); }
 
@@ -1426,6 +1435,7 @@ function pokeCreature() {
   else if (c.happiness < 40) pool = ['💔', '🥺'];
   else                       pool = ['💗', '✨', '♪', '😊'];
   showEmote(sprite, pool[Math.floor(Math.random() * pool.length)]);
+  if (typeof FX !== 'undefined') FX.burst(sprite, '#22e0ff', 8);
 
   const now = Date.now();
   if (now - lastPokeReward > 3000) {
@@ -1481,6 +1491,7 @@ function checkEvolutionNotice() {
   });
   document.body.appendChild(overlay);
   SFX.evolve();
+  if (typeof FX !== 'undefined') { FX.flash('rgba(180,92,255,0.7)', 650); FX.shake(10); }
 }
 
 function toggleMute(btn) {
@@ -1623,6 +1634,8 @@ function doAction(action) {
   if (action === 'feed') SFX.munch();
   else if (action === 'bathe') SFX.splash();
   else if (action === 'sleep') SFX.good();
+  const burstColor = { feed:'#ff8324', bathe:'#22e0ff', sleep:'#b45cff', train:'#b4ff3d' }[action] || '#ffc531';
+  if (sprite && typeof FX !== 'undefined') FX.burst(sprite, burstColor, 12);
   if (Math.random() < 0.25) hypePraise();
 
   // Feed animation: show food flying to creature
@@ -1651,6 +1664,7 @@ function doBondAction() {
   renderHome();
 
   const sprite = document.getElementById('home-creature-sprite');
+  if (sprite && typeof FX !== 'undefined') FX.burst(sprite, '#ff4fd8', 16);
   if (sprite) {
     sprite.classList.add('care-react');
     setTimeout(() => sprite.classList.remove('care-react'), 800);
@@ -2708,12 +2722,20 @@ function statBar(label, val, max) {
 
 function vitalBar(icon, label, val) {
   const pct = Math.max(0, Math.min(100, val));
-  const color = pct > 60 ? '#10b981' : pct > 30 ? '#f59e0b' : '#ef4444';
+  // Neon gradient fills that shift from toxic-green through gold to hot red
+  const grad = pct > 60
+    ? 'linear-gradient(90deg,#2fe89a,#b4ff3d)'
+    : pct > 30
+      ? 'linear-gradient(90deg,#ff8324,#ffc531)'
+      : 'linear-gradient(90deg,#ff1f4f,#ff3b6b)';
+  const tint = pct > 60 ? '#2fe89a' : pct > 30 ? '#ffc531' : '#ff3b6b';
   return `
-    <div class="vital-bar">
+    <div class="vital-bar ${pct <= 25 ? 'vital-low' : ''}" title="${label}">
       <span class="vb-icon">${icon}</span>
-      <div class="vb-track"><div class="vb-fill" style="width:${pct}%;background:${color}"></div></div>
-      <span class="vb-val">${Math.round(pct)}%</span>
+      <div class="vb-track">
+        <div class="vb-fill" style="width:${pct}%;background:${grad};color:${tint}"></div>
+      </div>
+      <span class="vb-val" style="color:${tint}">${Math.round(pct)}%</span>
     </div>
   `;
 }
@@ -2759,6 +2781,7 @@ function startParticles() {
 
 // ---- Button Event Listeners (global) ----
 window.addEventListener('DOMContentLoaded', () => {
+  if (typeof FX !== 'undefined') FX.init();
   loadGame();
   checkDailyStreak();
   detectCustomSprites(found => {
