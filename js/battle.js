@@ -412,13 +412,22 @@ const Battle = (() => {
         if (ev.type === 'status') SFX.debuff();
 
         if (ev.type === 'damage') {
-          SFX.impact(ev.elemMult || 1);
+          const mult = ev.elemMult || 1;
+          SFX.impact(mult);
           const target = ev.target === opponentC.id ? p2Sprite : p1Sprite;
           if (target) {
             target.classList.add('hit-shake');
             setTimeout(() => target.classList.remove('hit-shake'), 500);
+            if (typeof FX !== 'undefined') {
+              // Super-effective hits rock the whole screen
+              FX.shake(mult >= 1.25 ? 14 : 6);
+              FX.burst(target, mult >= 1.25 ? '#ffe066' : '#ff3b6b', mult >= 1.25 ? 20 : 10);
+              if (mult >= 1.25) FX.flash('rgba(255,230,102,0.35)', 260);
+              // Taking a hit tints the screen red
+              if (ev.target !== opponentC.id) FX.flash('rgba(255,59,107,0.28)', 240);
+            }
           }
-          spawnDamageNumber(ev.dmg, ev.target === opponentC.id ? 'opp' : 'player', ev.elemMult || 1);
+          spawnDamageNumber(ev.dmg, ev.target === opponentC.id ? 'opp' : 'player', mult);
         }
 
         await addLog(ev);
@@ -489,6 +498,7 @@ const Battle = (() => {
       const player   = buildCombatant(playerCreature, true);
       const opponent = buildCombatant(opponentData,   false);
       SFX.battleStart();
+      if (typeof FX !== 'undefined') { FX.flash('rgba(255,59,107,0.45)', 420); FX.shake(9); }
       const result   = simulateBattle(player, opponent);
       await playBattle(result, player, opponent);
       return result;
