@@ -19,14 +19,35 @@
        ==================================================== -->
   <div id="screen-title" class="screen">
     <canvas id="title-particles"></canvas>
+    <!-- Creatures glide slowly across, showcasing the roster -->
+    <div id="title-parade" class="title-parade" aria-hidden="true"></div>
     <div class="title-content">
       <div class="title-logo">
-        <span class="title-egg">🥚</span>
+        <div class="title-egg-mark">
+          <svg viewBox="0 0 100 124" width="96" height="119" role="img" aria-label="HatchBound egg">
+            <defs>
+              <radialGradient id="tEgg" cx="38%" cy="30%" r="72%">
+                <stop offset="0%"   stop-color="#fff6d8"/>
+                <stop offset="45%"  stop-color="#ffc531"/>
+                <stop offset="100%" stop-color="#ff5a2a"/>
+              </radialGradient>
+              <linearGradient id="tEggRim" x1="0" y1="0" x2="1" y2="1">
+                <stop offset="0%"   stop-color="#22e0ff"/>
+                <stop offset="55%"  stop-color="#b45cff"/>
+                <stop offset="100%" stop-color="#ff4fd8"/>
+              </linearGradient>
+            </defs>
+            <ellipse cx="50" cy="66" rx="37" ry="48" fill="url(#tEgg)"/>
+            <ellipse cx="50" cy="66" rx="37" ry="48" fill="none"
+                     stroke="url(#tEggRim)" stroke-width="2.5" opacity="0.95"/>
+            <path d="M50 20 L44 44 L56 52 L46 70 L58 80 L48 112"
+                  fill="none" stroke="#fff6d8" stroke-width="2.2"
+                  stroke-linecap="round" opacity="0.55"/>
+            <ellipse cx="38" cy="44" rx="10" ry="15" fill="#fff" opacity="0.35"/>
+          </svg>
+        </div>
         <div class="title-main">HatchBound</div>
         <div class="title-sub">Beast Arena</div>
-      </div>
-      <div class="title-egg-row">
-        <span>🦎</span><span>🦁</span><span>🐉</span>
       </div>
       <p class="title-tagline">"You don't just collect the fighter. You raise the fighter."</p>
       <div class="title-buttons">
