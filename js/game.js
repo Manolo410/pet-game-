@@ -86,9 +86,13 @@ function ensureCreatureFields(c) {
 }
 
 // ---- Save / Load ----
-function saveGame() {
-  const data = {
+const SAVE_KEY = 'hatchbound_save';
+const SAVE_BACKUP_KEY = 'hatchbound_save_backup';
+
+function collectSaveData() {
+  return {
     version: GV,
+    savedAt: Date.now(),
     coins: G.coins,
     creature: G.creature,
     collection: G.collection,
@@ -98,35 +102,81 @@ function saveGame() {
     daily: G.daily,
     settings: G.settings
   };
-  localStorage.setItem('hatchbound_save', JSON.stringify(data));
+}
+
+function saveGame() {
+  const data = collectSaveData();
+  let json;
+  try {
+    json = JSON.stringify(data);
+  } catch (e) {
+    console.warn('save serialize failed', e);
+    return false;
+  }
+  try {
+    // Keep the previous good save as a backup before overwriting, so a
+    // half-written or corrupted write can never lose everything.
+    const prev = localStorage.getItem(SAVE_KEY);
+    if (prev) localStorage.setItem(SAVE_BACKUP_KEY, prev);
+    localStorage.setItem(SAVE_KEY, json);
+  } catch (e) {
+    // Private mode / quota exhausted — tell the player rather than failing silently
+    console.warn('local save failed', e);
+    if (!saveGame._warned) {
+      saveGame._warned = true;
+      showToast("Couldn't save locally — storage is blocked or full", 5000);
+    }
+    return false;
+  }
+  // Mirror to the cloud when the player is signed in
+  if (typeof Cloud !== 'undefined' && Cloud.isSignedIn()) Cloud.queuePush(data);
+  return true;
+}
+
+// Apply a save object (from local storage or the cloud) into game state
+function applySaveData(data) {
+  if (!data) return false;
+  G.coins = typeof data.coins === 'number' ? data.coins : 100;
+  G.creature = ensureCreatureFields(data.creature || null);
+  G.collection = data.collection || [];
+  G.inventory = data.inventory || ['basic_meat','bandage'];
+  G.incubation = data.incubation || null;
+  // Migrate incubation saved by the old timer-based system (no bond field)
+  if (G.incubation && typeof G.incubation.bond !== 'number') {
+    G.incubation = {
+      creatureId: G.incubation.creatureId,
+      creatureName: G.incubation.creatureName,
+      bond: 0,
+      stats: { warmth: 0, comfort: 0, energy: 0, stability: 0, bond: 0 },
+      careActions: [],
+      crackStage: 0
+    };
+  }
+  G.campaign = data.campaign || { progress: 1, stars: {} };
+  G.daily = data.daily || { last: null, streak: 0 };
+  G.settings = data.settings || { instructions: true };
+  return true;
+}
+
+function readLocalSave() {
+  for (const key of [SAVE_KEY, SAVE_BACKUP_KEY]) {
+    try {
+      const raw = localStorage.getItem(key);
+      if (!raw) continue;
+      const data = JSON.parse(raw);
+      if (data && typeof data === 'object') {
+        if (key === SAVE_BACKUP_KEY) console.warn('primary save unreadable — recovered from backup');
+        return data;
+      }
+    } catch (e) { /* try the backup next */ }
+  }
+  return null;
 }
 
 function loadGame() {
-  try {
-    const raw = localStorage.getItem('hatchbound_save');
-    if (!raw) return false;
-    const data = JSON.parse(raw);
-    G.coins = data.coins || 100;
-    G.creature = ensureCreatureFields(data.creature || null);
-    G.collection = data.collection || [];
-    G.inventory = data.inventory || ['basic_meat','bandage'];
-    G.incubation = data.incubation || null;
-    // Migrate incubation saved by the old timer-based system (no bond field)
-    if (G.incubation && typeof G.incubation.bond !== 'number') {
-      G.incubation = {
-        creatureId: G.incubation.creatureId,
-        creatureName: G.incubation.creatureName,
-        bond: 0,
-        stats: { warmth: 0, comfort: 0, energy: 0, stability: 0, bond: 0 },
-        careActions: [],
-        crackStage: 0
-      };
-    }
-    G.campaign = data.campaign || { progress: 1, stars: {} };
-    G.daily = data.daily || { last: null, streak: 0 };
-    G.settings = data.settings || { instructions: true };
-    return true;
-  } catch { return false; }
+  const data = readLocalSave();
+  if (!data) return false;
+  return applySaveData(data);
 }
 
 // ---- XP & Level Up ----
@@ -1082,6 +1132,149 @@ function hatchCelebration(def) {
   }
 }
 
+// =====================================================
+// ACCOUNTS — optional cloud login and save sync
+// =====================================================
+
+// Decide between the local save and the cloud save after signing in.
+// Newest wins; the loser is kept as a backup rather than discarded.
+async function syncAfterSignIn() {
+  let cloudSave = null;
+  try { cloudSave = await Cloud.pull(); }
+  catch (e) { console.warn('cloud pull failed', e.message); showToast("Couldn't reach the cloud — playing locally", 4000); return; }
+
+  const local = readLocalSave();
+  const cloudAt = (cloudSave && cloudSave.savedAt) || 0;
+  const localAt = (local && local.savedAt) || 0;
+
+  if (cloudSave && cloudAt >= localAt) {
+    if (local) { try { localStorage.setItem(SAVE_BACKUP_KEY, JSON.stringify(local)); } catch {} }
+    applySaveData(cloudSave);
+    try { localStorage.setItem(SAVE_KEY, JSON.stringify(cloudSave)); } catch {}
+    showToast('Character loaded from your account!', 3500);
+  } else if (local) {
+    try { await Cloud.push(local); showToast('Progress backed up to your account!', 3500); }
+    catch (e) { console.warn('cloud push failed', e.message); }
+  }
+}
+
+function renderAccount() {
+  const el = document.getElementById('account-content');
+  if (!el) return;
+
+  if (!Cloud.isEnabled()) {
+    el.innerHTML = `
+      <div class="screen-header">
+        <button class="btn-back" onclick="showScreen('title')">← Back</button>
+        <h2>Account</h2>
+      </div>
+      <div class="account-box">
+        <div class="acct-title">Playing on this device</div>
+        <p class="acct-note">Your beast is saved automatically in this browser, so you can
+        close the game and pick up right where you left off.</p>
+        <p class="acct-note">Accounts that carry your beast between phones and computers
+        aren't switched on yet. Setup instructions are in <b>docs/CLOUD-SETUP.md</b>.</p>
+        <button class="btn-secondary" onclick="showScreen('title')">Back to Title</button>
+      </div>`;
+    return;
+  }
+
+  if (Cloud.isSignedIn()) {
+    el.innerHTML = `
+      <div class="screen-header">
+        <button class="btn-back" onclick="showScreen('title')">← Back</button>
+        <h2>Account</h2>
+      </div>
+      <div class="account-box">
+        <div class="acct-title">Signed in</div>
+        <div class="acct-email">${Cloud.email() || ''}</div>
+        <p class="acct-note">Your progress saves to your account automatically. Sign in on any
+        phone or computer and your beast will be waiting.</p>
+        <button class="btn-primary" onclick="showScreen('title')">Continue Playing</button>
+        <button class="btn-secondary" style="margin-top:10px" onclick="doSignOut()">Sign Out</button>
+      </div>`;
+    return;
+  }
+
+  el.innerHTML = `
+    <div class="screen-header">
+      <button class="btn-back" onclick="showScreen('title')">← Back</button>
+      <h2>Account</h2>
+    </div>
+    <div class="account-box">
+      <div class="acct-title">Save your beast forever</div>
+      <p class="acct-note">Create an account and your character follows you to any device.
+      You can also skip this and just play on this device.</p>
+      <input id="acct-email" class="acct-input" type="email" autocomplete="email"
+             placeholder="Email" spellcheck="false">
+      <input id="acct-pass" class="acct-input" type="password" autocomplete="current-password"
+             placeholder="Password (6+ characters)">
+      <div id="acct-msg" class="acct-msg"></div>
+      <button class="btn-primary" id="acct-signin">Log In</button>
+      <button class="btn-secondary" id="acct-signup" style="margin-top:10px">Create Account</button>
+      <button class="btn-secondary" style="margin-top:10px" onclick="showScreen('title')">
+        Play on this device only
+      </button>
+    </div>`;
+
+  const msg = document.getElementById('acct-msg');
+  const busy = (on, label) => {
+    ['acct-signin','acct-signup'].forEach(id => {
+      const b = document.getElementById(id);
+      if (b) b.disabled = on;
+    });
+    if (on && msg) { msg.className = 'acct-msg'; msg.textContent = label; }
+  };
+  const creds = () => {
+    const e = document.getElementById('acct-email');
+    const p = document.getElementById('acct-pass');
+    return { email: (e && e.value || '').trim(), password: (p && p.value) || '' };
+  };
+  const fail = text => { if (msg) { msg.className = 'acct-msg acct-err'; msg.textContent = text; } };
+
+  document.getElementById('acct-signin').addEventListener('click', async () => {
+    const { email, password } = creds();
+    if (!email || !password) return fail('Enter your email and password.');
+    busy(true, 'Signing in…');
+    try {
+      await Cloud.signIn(email, password);
+      await syncAfterSignIn();
+      SFX.good();
+      showScreen('title');
+    } catch (e) {
+      fail(e.status === 400 ? 'Wrong email or password.' : e.message);
+      busy(false);
+    }
+  });
+
+  document.getElementById('acct-signup').addEventListener('click', async () => {
+    const { email, password } = creds();
+    if (!email || !password) return fail('Enter an email and password.');
+    if (password.length < 6) return fail('Password must be at least 6 characters.');
+    busy(true, 'Creating your account…');
+    try {
+      const r = await Cloud.signUp(email, password);
+      if (r.needsConfirmation) {
+        if (msg) { msg.className = 'acct-msg acct-ok'; msg.textContent = 'Check your email to confirm, then log in.'; }
+        busy(false);
+        return;
+      }
+      await syncAfterSignIn();
+      SFX.good();
+      showScreen('title');
+    } catch (e) {
+      fail(e.message);
+      busy(false);
+    }
+  });
+}
+
+function doSignOut() {
+  Cloud.signOut();
+  showToast('Signed out. This device keeps its own save.', 4000);
+  renderAccount();
+}
+
 // ---- Screen Router ----
 function showScreen(id, data = {}) {
   G.screen = id;
@@ -1112,9 +1305,15 @@ function showToast(msg, duration = 2500) {
 const SCREENS = {
 
   title() {
-    const hasSave = !!localStorage.getItem('hatchbound_save');
+    const hasProgress = !!(G.creature || G.incubation);
     const cont = document.getElementById('btn-continue');
-    if (cont) cont.style.display = hasSave ? 'block' : 'none';
+    if (cont) cont.style.display = hasProgress ? 'block' : 'none';
+    const acct = document.getElementById('btn-account');
+    if (acct) {
+      acct.textContent = Cloud.isSignedIn()
+        ? '✅ ' + (Cloud.email() || 'Account')
+        : (Cloud.isEnabled() ? '☁️ Log In / Sign Up' : '💾 Save Info');
+    }
     startParticles();
     startTitleParade();
   },
@@ -1285,6 +1484,10 @@ const SCREENS = {
 
   campaign() {
     renderCampaign();
+  },
+
+  account() {
+    renderAccount();
   },
 
   'battle-prep'() {
@@ -2870,9 +3073,23 @@ window.addEventListener('DOMContentLoaded', () => {
     }
   });
 
-  // Progress always saved: also flush when the tab hides or closes
-  window.addEventListener('beforeunload', () => { try { saveGame(); } catch {} });
-  document.addEventListener('visibilitychange', () => { if (document.hidden) { try { saveGame(); } catch {} } });
+  // Progress always saved: flush on every way a player can leave.
+  // iOS Safari frequently skips beforeunload, so pagehide/visibilitychange
+  // do the real work there.
+  const flushSave = () => {
+    try {
+      saveGame();
+      if (Cloud.isSignedIn()) Cloud.flush(collectSaveData());
+    } catch {}
+  };
+  window.addEventListener('beforeunload', flushSave);
+  window.addEventListener('pagehide', flushSave);
+  document.addEventListener('visibilitychange', () => { if (document.hidden) flushSave(); });
+  // Safety net for long sessions that never background
+  setInterval(() => { try { saveGame(); } catch {} }, 30000);
+
+  // Resume a signed-in session on load
+  if (Cloud.isSignedIn()) syncAfterSignIn();
 
   showScreen('title');
 });

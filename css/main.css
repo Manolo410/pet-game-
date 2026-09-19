@@ -3555,3 +3555,68 @@ body::after {
   margin-bottom: 4px;
 }
 .title-egg-mark svg { display: block; }
+
+/* =====================================================
+   ACCOUNT SCREEN
+   ===================================================== */
+#screen-account { background: var(--bg-deep); }
+#account-content { padding: 16px; }
+.account-box {
+  max-width: 360px;
+  margin: 8px auto;
+  background:
+    linear-gradient(150deg, rgba(255,255,255,0.10), rgba(255,255,255,0.03)),
+    rgba(18,13,36,0.82);
+  border: 1.5px solid var(--border);
+  border-radius: var(--radius);
+  padding: 22px 20px;
+  box-shadow: 0 10px 30px rgba(0,0,0,0.5), inset 0 1px 0 rgba(255,255,255,0.14);
+  text-align: center;
+}
+.acct-title {
+  font-size: 1.2rem;
+  font-weight: 900;
+  margin-bottom: 10px;
+  background: var(--grad-cool);
+  -webkit-background-clip: text;
+  background-clip: text;
+  -webkit-text-fill-color: transparent;
+}
+.acct-email {
+  font-size: 0.95rem;
+  font-weight: 700;
+  color: var(--cyan);
+  margin-bottom: 12px;
+  word-break: break-all;
+  text-shadow: 0 0 14px rgba(34,224,255,0.5);
+}
+.acct-note {
+  font-size: 0.85rem;
+  color: var(--text-dim);
+  line-height: 1.55;
+  margin-bottom: 14px;
+  text-align: left;
+}
+.acct-input {
+  width: 100%;
+  background: rgba(0,0,0,0.35);
+  border: 1.5px solid var(--border);
+  border-radius: 50px;
+  padding: 13px 18px;
+  font-size: 1rem;
+  color: var(--text);
+  margin-bottom: 10px;
+  outline: none;
+  transition: border-color 0.2s, box-shadow 0.2s;
+}
+.acct-input::placeholder { color: var(--text-muted); }
+.acct-input:focus { border-color: var(--cyan); box-shadow: 0 0 0 3px rgba(34,224,255,0.2); }
+.acct-msg {
+  min-height: 20px;
+  font-size: 0.82rem;
+  color: var(--text-dim);
+  margin-bottom: 10px;
+}
+.acct-msg.acct-err { color: #ff6b8f; font-weight: 700; }
+.acct-msg.acct-ok  { color: var(--green); font-weight: 700; }
+.account-box button:disabled { opacity: 0.55; cursor: not-allowed; }
