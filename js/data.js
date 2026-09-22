@@ -390,8 +390,8 @@ const ITEMS = {
   fire_berry:    { name:'Fire Berry',    icon:'🍒', type:'food',  stat:'hunger', value:25, desc:'Spicy berry — also boosts attack briefly.' },
   sweet_fruit:   { name:'Sweet Fruit',   icon:'🍊', type:'food',  stat:'happiness', value:20, desc:'Favorite treat. Boosts happiness.' },
   crystal_water: { name:'Crystal Water', icon:'💎', type:'food',  stat:'all',    value:15, desc:'Refreshes all stats slightly.' },
-  bandage:       { name:'Bandage',       icon:'🩹', type:'battle',stat:'hp',     value:30, desc:'Battle: Restores 30 HP mid-fight.' },
-  focus_berry:   { name:'Focus Berry',   icon:'🫐', type:'battle',stat:'atk',    value:25, desc:'Battle: Raises attack by 25% for 2 turns.' },
+  bandage:       { name:'Bandage',       icon:'🩹', type:'battle',stat:'hp',     value:30, desc:'Battle: Heals 30% HP once when below 35%.' },
+  focus_berry:   { name:'Focus Berry',   icon:'🫐', type:'battle',stat:'atk',    value:25, desc:'Battle: Your first attack hits 25% harder.' },
   smoke_cloud:   { name:'Smoke Cloud',   icon:'💨', type:'battle',stat:'evade',  value:40, desc:'Battle: Raises evasion for 2 turns.' },
   revive_herb:   { name:'Revive Herb',   icon:'🌿', type:'battle',stat:'hp',     value:50, desc:'Battle: Restores 50 HP when below 25%.' }
 };
@@ -424,7 +424,7 @@ const PERSONALITIES = {
   mischievous: { name:'Mischievous', icon:'😈',  bonuses:{ spd:5,  def:-2 }, battleQuote:'Finds unexpected angles of attack!' },
   stubborn:    { name:'Stubborn',    icon:'🪨',  bonuses:{ def:8,  spd:-5 }, battleQuote:'Refuses to go down no matter what!' },
   shy:         { name:'Shy',         icon:'🌸',  bonuses:{ spd:3,  atk:-2 }, battleQuote:'Gathers courage and strikes!' },
-  sleepy:      { name:'Sleepy',      icon:'😴',  bonuses:{ sta:8,  spd:-4 }, battleQuote:'Woke up, and now the opponent regrets it.' }
+  sleepy:      { name:'Sleepy',      icon:'😴',  bonuses:{ hp:12,  spd:-4 }, battleQuote:'Woke up, and now the opponent regrets it.' }
 };
 
 // ---- XP TABLE ----

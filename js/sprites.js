@@ -1085,32 +1085,43 @@ const SPRITES = {
 
 // ---- Stage visual modifiers (CSS injected per stage) ----
 const STAGE_STYLES = {
-  baby:     { scale: 0.78, filter: 'brightness(1.05)',    extra: '' },
-  child:    { scale: 0.90, filter: 'brightness(1.07)',    extra: '' },
-  teen:     { scale: 1.00, filter: 'brightness(1.1)',     extra: '' },
-  adult:    { scale: 1.12, filter: 'brightness(1.15) saturate(1.1)', extra: '' },
-  champion: { scale: 1.25, filter: 'brightness(1.2) saturate(1.2) contrast(1.05)', extra: '' },
-  mythic:   { scale: 1.40, filter: 'brightness(1.3) saturate(1.35) contrast(1.1)',  extra: '' }
+  baby:  { scale: 0.80, filter: 'brightness(1.05)' },
+  teen:  { scale: 0.92, filter: 'brightness(1.1)' },
+  // 1.0 fills the box exactly; anything larger spilled over neighbours
+  adult: { scale: 1.00, filter: 'brightness(1.15) saturate(1.1)' }
 };
 
-// Returns an HTML string: SVG wrapped in a styled container.
-// If a custom image is registered for this creature+stage in
-// CUSTOM_SPRITES (js/custom-sprites.js), it is used instead —
-// so dropped-in AI-generated art overrides the built-in SVGs.
+// Returns an HTML string for a creature sprite.
+// Character art is loaded straight from assets/creatures/<id>_<phase>.png.
+// If a file is missing the <img> swaps itself for the built-in SVG, and the
+// miss is remembered so later renders go straight to the SVG. Dropping new
+// art into that folder is all it takes — no registration, no probing.
+const spriteMisses = new Set();
+
+function spriteFallback(img) {
+  const id = img.dataset.cid;
+  spriteMisses.add(img.dataset.key);
+  const holder = document.createElement('div');
+  holder.style.cssText = 'width:100%;height:100%';
+  holder.innerHTML = SPRITES[id] || '';
+  img.replaceWith(holder);
+}
+
 function getSpriteHTML(creatureId, stage, sizePx) {
-  const styleDef = STAGE_STYLES[stage] || STAGE_STYLES.baby;
+  const phase = (typeof CUSTOM_STAGE_MAP !== 'undefined' && CUSTOM_STAGE_MAP[stage]) || stage;
+  const styleDef = STAGE_STYLES[phase] || STAGE_STYLES.baby;
   const base = sizePx || 120;
   const scaled = Math.round(base * styleDef.scale);
+  const key = `${creatureId}_${phase}`;
 
-  const custom = typeof CUSTOM_SPRITES !== 'undefined' && CUSTOM_SPRITES[creatureId];
-  const phase = typeof CUSTOM_STAGE_MAP !== 'undefined' ? (CUSTOM_STAGE_MAP[stage] || stage) : stage;
-  const inner = custom && custom.includes(phase)
-    ? `<img src="assets/creatures/${creatureId}_${phase}.png" alt="" draggable="false"
-            style="width:100%;height:100%;object-fit:contain;image-rendering:auto">`
-    : (SPRITES[creatureId] || '');
+  const inner = spriteMisses.has(key)
+    ? (SPRITES[creatureId] || '')
+    : `<img src="assets/creatures/${key}.png" alt="" draggable="false" decoding="async"
+            data-cid="${creatureId}" data-key="${key}" onerror="spriteFallback(this)"
+            style="width:100%;height:100%;object-fit:contain">`;
 
   return `<div class="creature-sprite-wrap" style="width:${base}px;height:${base}px;display:flex;align-items:center;justify-content:center">
-    <div style="width:${scaled}px;height:${scaled}px;filter:${styleDef.filter};transition:all 0.5s ease;">
+    <div style="width:${scaled}px;height:${scaled}px;filter:${styleDef.filter}">
       ${inner}
     </div>
   </div>`;

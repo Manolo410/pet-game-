@@ -5,6 +5,21 @@
 // ---- Bond-based incubation threshold ----
 const BOND_THRESHOLD = 100;
 
+// Escape player-supplied text before it goes into innerHTML
+function esc(s) {
+  return String(s == null ? '' : s).replace(/[&<>"']/g, ch => (
+    { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[ch]));
+}
+
+// Local calendar date (YYYY-MM-DD). Daily streaks must roll over at the
+// player's midnight, not UTC's — otherwise US evenings count as tomorrow.
+function localDateKey(d) {
+  d = d || new Date();
+  const m = String(d.getMonth() + 1).padStart(2, '0');
+  const day = String(d.getDate()).padStart(2, '0');
+  return `${d.getFullYear()}-${m}-${day}`;
+}
+
 // ---- Global Game State ----
 let G = {
   screen: 'title',
@@ -62,7 +77,8 @@ function createCreature(id, name) {
     recoveryEvents: 0,
     bondLevel: 0,
     nightSessions: 0,
-    evolutionPath: null,
+    evolutionPaths: [],
+    stageActivity: freshStageActivity(),
     equippedMoves: def.moves.slice(0, 3),
     equippedGear: { weapon: null, armor: null, trinket: null },
     gearInventory: [],
@@ -80,8 +96,13 @@ function ensureCreatureFields(c) {
   if (!c.gearInventory)  c.gearInventory  = [];
   if (c.colorTint === undefined) c.colorTint = 0;
   if (!c.trainedStats)   c.trainedStats   = { atk: 0, def: 0, spd: 0, hp: 0 };
+  c.incubationBonuses = normalizeBonuses(c.incubationBonuses);
   if (!c.nature)         c.nature         = rollNature();
   if (!c.ivs)            c.ivs            = rollIVs();
+  if (typeof c.level === 'number') c.stage = stageFromLevel(c.level).id;
+  if (!c.stageActivity)  c.stageActivity  = freshStageActivity();
+  if (!Array.isArray(c.evolutionPaths)) c.evolutionPaths = [];
+  delete c.evolutionPath;   // unused field from earlier versions
   return c;
 }
 
@@ -93,6 +114,11 @@ function collectSaveData() {
   return {
     version: GV,
     savedAt: Date.now(),
+    // Which account this save belongs to (null = played without signing
+    // in). Only sign-in reconciliation changes it, so neither an expired
+    // session nor an autosave mid-sign-in can re-label someone's beast.
+    owner: G.owner || null,
+    cloudBase: G.cloudBase || 0,   // savedAt of the cloud version last synced
     coins: G.coins,
     creature: G.creature,
     collection: G.collection,
@@ -155,6 +181,8 @@ function applySaveData(data) {
   G.campaign = data.campaign || { progress: 1, stars: {} };
   G.daily = data.daily || { last: null, streak: 0 };
   G.settings = data.settings || { instructions: true };
+  G.owner = data.owner || null;
+  G.cloudBase = data.cloudBase || 0;
   return true;
 }
 
@@ -194,7 +222,12 @@ function grantXP(amount) {
     const newStage = stageFromLevel(G.creature.level);
     if (newStage.id !== G.creature.stage) {
       G.creature.stage = newStage.id;
-      G.notifications.push({ type:'evolve', stage: newStage });
+      // Undecided upbringing defaults to Guardian — it was cared for, at least
+      const path = determineEvolutionPath(G.creature) || 'guardian';
+      if (!G.creature.evolutionPaths) G.creature.evolutionPaths = [];
+      G.creature.evolutionPaths.push({ stage: newStage.id, path });
+      G.creature.stageActivity = freshStageActivity();
+      G.notifications.push({ type:'evolve', stage: newStage, path });
     }
   }
   if (leveled) {
@@ -204,20 +237,42 @@ function grantXP(amount) {
   return leveled;
 }
 
-// ---- Determine evolution path ----
+// ---- Evolution paths ----
+// How you raise your beast during a stage decides the path it locks in when
+// it evolves, and each locked path is a permanent stat bonus (applied in
+// battle). Activity is counted per stage, so every evolution reflects that
+// stage's upbringing.
+const EVOLUTION_PATHS = {
+  warrior:  { name: 'Warrior',  icon: '⚔️', via: 'training',      stat: 'atk', label: '+6% ATK' },
+  guardian: { name: 'Guardian', icon: '🛡️', via: 'care & affection', stat: 'hp',  label: '+6% HP' },
+  duelist:  { name: 'Duelist',  icon: '💨', via: 'battling',       stat: 'spd', label: '+6% SPD' },
+  survivor: { name: 'Survivor', icon: '🪨', via: 'pulling through hard times', stat: 'def', label: '+6% DEF' }
+};
+const PATH_BONUS = 1.06;
+// Weights balance how often each activity happens: care actions are cheap
+// and frequent, training is energy-gated, hardship is rare.
+const PATH_WEIGHTS = { training: 4, care: 0.6, battle: 2, recovery: 5 };
+
+function freshStageActivity() { return { training: 0, care: 0, battle: 0, recovery: 0 }; }
+
+function trackActivity(kind, amount) {
+  const c = G.creature;
+  if (!c) return;
+  if (!c.stageActivity) c.stageActivity = freshStageActivity();
+  c.stageActivity[kind] = (c.stageActivity[kind] || 0) + (amount || 1);
+}
+
+// Leading path for the current stage, or null if nothing's happened yet
 function determineEvolutionPath(creature) {
-  const c = creature;
+  const a = creature.stageActivity || freshStageActivity();
   const scores = {
-    warrior:  c.trainingCount * 2,
-    guardian: c.affectionCount * 2,
-    aggressive: c.battleCount * 2,
-    shadow:   c.nightSessions * 3,
-    survivor: c.recoveryEvents * 4,
-    bonded:   c.bondLevel * 3
+    warrior:  a.training * PATH_WEIGHTS.training,
+    guardian: a.care     * PATH_WEIGHTS.care,
+    duelist:  a.battle   * PATH_WEIGHTS.battle,
+    survivor: a.recovery * PATH_WEIGHTS.recovery
   };
-  scores.healthy = (c.hunger + c.hygiene + c.happiness + c.energy) / 4;
-  const best = Object.entries(scores).sort((a,b) => b[1]-a[1])[0];
-  return best[0];
+  const [best, score] = Object.entries(scores).sort((x, y) => y[1] - x[1])[0];
+  return score > 0 ? best : null;
 }
 
 // ---- Care Actions ----
@@ -232,6 +287,7 @@ function careAction(action) {
   G.careActionCooldown[action] = now;
 
   const c = G.creature;
+  drainStats();   // settle elapsed decay before applying the action
   let xpGained = 0;
 
   switch(action) {
@@ -285,22 +341,49 @@ function careAction(action) {
   }
 
   c.lastCareTime = Date.now();
-  drainStats();
+  trackActivity('care');
   saveGame();
   return { xp: xpGained };
 }
 
 // ---- Stat decay over time ----
+// Vitals fall ~2 points per 3 minutes. Decay is applied only for the time
+// since the previous drain, so it stays linear however often this runs.
+// (It used to measure from the last care action on every call, which
+// re-subtracted the same minutes over and over and drained quadratically.)
+const VITAL_DECAY_PER_MIN = 2 / 3;
+// Coming back after days away should find a hungry, needy beast — not an
+// empty one. Offline decay stops at this floor.
+const VITAL_OFFLINE_FLOOR = 12;
+
 function drainStats() {
   if (!G.creature) return;
   const c = G.creature;
-  const elapsed = (Date.now() - (c.lastCareTime || Date.now())) / 1000 / 60; // minutes
-  const rate = 2 * (elapsed / 3); // ~2 pts every 3 minutes of neglect
-  c.hunger    = Math.max(0, c.hunger    - rate);
-  c.hygiene   = Math.max(0, c.hygiene   - rate * 0.8);
-  c.happiness = Math.max(0, c.happiness - rate * 0.6);
-  c.energy    = Math.max(0, c.energy    - rate * 0.5);
-  if (c.hunger < 20) c.recoveryEvents++;
+  const now = Date.now();
+  const last = c.lastDrainTime || c.lastCareTime || now;
+  const minutes = Math.max(0, (now - last) / 60000);
+  c.lastDrainTime = now;
+  if (minutes <= 0) return;
+
+  const rate = VITAL_DECAY_PER_MIN * minutes;
+  const wasHungry = c.hunger < 20;
+  // A long gap means the player was away: never push a vital below the
+  // floor, but don't raise one that was already lower.
+  const away = minutes > 30;
+  const decay = (v, mult) => {
+    const next = v - rate * mult;
+    return away ? Math.max(Math.min(v, VITAL_OFFLINE_FLOOR), next) : Math.max(0, next);
+  };
+  c.hunger    = decay(c.hunger,    1);
+  c.hygiene   = decay(c.hygiene,   0.8);
+  c.happiness = decay(c.happiness, 0.6);
+  c.energy    = decay(c.energy,    0.5);
+  // Count each time it slips into hunger once, not every tick while hungry
+  if (!wasHungry && c.hunger < 20) {
+    c.recoveryEvents = (c.recoveryEvents || 0) + 1;
+    if (!c.stageActivity) c.stageActivity = freshStageActivity();
+    c.stageActivity.recovery++;
+  }
 }
 
 // ---- Incubation ----
@@ -317,16 +400,44 @@ function startIncubation(creatureId, creatureName) {
   saveGame();
 }
 
+// Every bonus here is applied in battle (see Battle.buildCombatant).
+const INCUBATION_BONUSES = {
+  warmth:    { key: 'tough_shell',  name: 'Tough Shell',   effect: '+10% DEF',  mods: { def: 1.10 } },
+  comfort:   { key: 'gentle_soul',  name: 'Gentle Soul',   effect: '+10% HP',   mods: { hp: 1.10 } },
+  energy:    { key: 'swift_wings',  name: 'Swift Wings',   effect: '+10% SPD',  mods: { spd: 1.10 } },
+  stability: { key: 'iron_will',    name: 'Iron Will',     effect: '+10% ATK',  mods: { atk: 1.10 } }
+};
+const BONUS_PERFECT = { key: 'perfect_care', name: 'Perfect Care', effect: '+5% to every stat',
+                        mods: { hp: 1.05, atk: 1.05, def: 1.05, spd: 1.05 } };
+const BONUS_HEART   = { key: 'heart_bond',   name: 'Heart Bond',   effect: 'Heals 4% HP each round', regen: 0.04 };
+
 function calculateIncubationBonus(stats) {
+  const games = ['warmth', 'comfort', 'energy', 'stability'];
+  const total = games.reduce((a, k) => a + (stats[k] || 0), 0);
   const bonuses = [];
-  const total = Object.values(stats).reduce((a,b) => a+b, 0);
-  if (stats.warmth >= 80) bonuses.push({ name:'Tough Shell', effect:'+10% defense' });
-  if (stats.comfort >= 80) bonuses.push({ name:'Gentle Soul', effect:'+Loyalty personality' });
-  if (stats.energy >= 80) bonuses.push({ name:'Swift Wings', effect:'+10% speed' });
-  if (stats.stability >= 80) bonuses.push({ name:'Mutation Seed', effect:'Rare trait chance' });
-  if (stats.bond >= 80) bonuses.push({ name:'Heart Bond', effect:'Special passive ability' });
-  if (total >= 400) bonuses.push({ name:'Perfect Care', effect:'Rare evolution available!' });
-  return bonuses;
+  if (total > 0) {
+    // Specialist: a game that got 40%+ of your effort
+    for (const k of games) {
+      if ((stats[k] || 0) / total >= 0.40) bonuses.push(INCUBATION_BONUSES[k]);
+    }
+    // All-rounder: every game got at least 15%
+    if (games.every(k => (stats[k] || 0) / total >= 0.15)) bonuses.push(BONUS_PERFECT);
+  }
+  // Affection: petting the egg often
+  if ((stats.bond || 0) >= 6) bonuses.push(BONUS_HEART);
+  return bonuses.map(b => ({ ...b }));
+}
+
+// Older saves stored bonuses as {name, effect} text only; map names back
+// to the real definitions so those beasts get their bonuses too.
+function normalizeBonuses(list) {
+  const all = [...Object.values(INCUBATION_BONUSES), BONUS_PERFECT, BONUS_HEART];
+  const legacy = { 'Mutation Seed': 'iron_will' };
+  return (list || []).map(b => {
+    if (b && b.key) return all.find(x => x.key === b.key) || b;
+    const key = legacy[b && b.name];
+    return all.find(x => x.name === (b && b.name) || x.key === key) || null;
+  }).filter(Boolean);
 }
 
 function hatchEgg() {
@@ -522,8 +633,10 @@ function runWarmGame() {
   const heatBtn = document.getElementById('wg-heat-btn');
 
   // Heating on press
-  heatBtn.addEventListener('mousedown', () => { if (!gameOver) { temp = Math.min(100, temp + 7); SFX.tap(); } });
-  heatBtn.addEventListener('touchstart', (e) => { e.preventDefault(); if (!gameOver) { temp = Math.min(100, temp + 7); SFX.tap(); } });
+  heatBtn.addEventListener('pointerdown', e => {
+    e.preventDefault();
+    if (!gameOver) { temp = Math.min(100, temp + 7); SFX.tap(); }
+  });
 
   const gameLoop = setInterval(() => {
     if (gameOver || !incuGameActive(token)) { clearInterval(gameLoop); return; }
@@ -702,8 +815,8 @@ function runRockGame() {
     }
   }
 
-  leftBtn.addEventListener('click', () => doRock(true));
-  rightBtn.addEventListener('click', () => doRock(false));
+  leftBtn.addEventListener('pointerdown', e => { e.preventDefault(); doRock(true); });
+  rightBtn.addEventListener('pointerdown', e => { e.preventDefault(); doRock(false); });
 }
 
 // ---- Incubation Mini-Game: Sing to It (Simon Says) ----
@@ -801,7 +914,11 @@ function runSingGame() {
 
   function finishSingGame() {
     if (!incuGameActive(token)) return;
-    gameEndHype(totalBond / 20);
+    incuGameToken++;   // this session is over — ignore any late taps
+    const roundsCleared = totalBond / 4;
+    const ratio = roundsCleared / maxRounds;
+    gameEndHype(ratio);
+    totalBond = Math.floor(8 + ratio * 7);
     incu.bond = Math.min(BOND_THRESHOLD + 10, incu.bond + totalBond);
     incu.stats.energy = Math.min(100, incu.stats.energy + totalBond);
     incu.crackStage = Math.floor(incu.bond / 25);
@@ -815,7 +932,7 @@ function runSingGame() {
 
   // Button click handler
   const grid = document.getElementById('sg-grid');
-  grid.addEventListener('click', (e) => {
+  grid.addEventListener('pointerdown', (e) => {
     const btn = e.target.closest('.simon-btn');
     if (!btn || !accepting) return;
     const idx = parseInt(btn.dataset.idx);
@@ -937,24 +1054,14 @@ function runShieldGame() {
     let posY = startY;
     let alive = true;
 
-    threat.addEventListener('click', () => {
-      if (!alive || gameOver) return;
-      alive = false;
-      SFX.block();
-      threat.classList.add('threat-blocked');
-      blocked++;
-      if (blocked === 6) hype('SHIELD MASTER!', '#60a5fa', true);
-      if (blockedEl) blockedEl.textContent = blocked;
-      setTimeout(() => threat.remove(), 300);
-    });
-
-    threat.addEventListener('touchstart', (e) => {
+    threat.addEventListener('pointerdown', e => {
       e.preventDefault();
       if (!alive || gameOver) return;
       alive = false;
       SFX.block();
       threat.classList.add('threat-blocked');
       blocked++;
+      if (blocked === 6) hype('SHIELD MASTER!', '#60a5fa', true);
       if (blockedEl) blockedEl.textContent = blocked;
       setTimeout(() => threat.remove(), 300);
     });
@@ -1052,7 +1159,7 @@ function renderIncubation() {
 
   el.innerHTML = `
     <div class="incu-header">
-      <div class="incu-creature-name">${incu.creatureName}'s Egg</div>
+      <div class="incu-creature-name">${esc(incu.creatureName)}'s Egg</div>
       <div class="incu-category-label">${def.title}</div>
       <button class="btn-mute" onclick="toggleMute(this)">${SFX.isMuted() ? '🔇' : '🔊'}</button>
     </div>
@@ -1068,6 +1175,12 @@ function renderIncubation() {
         <button class="btn-hatch-now" onclick="showScreen('hatching')">Hatch Now!</button>
       </div>
     ` : `
+      ${(() => {
+        const preview = calculateIncubationBonus(incu.stats);
+        return preview.length
+          ? `<div class="incu-bonus-preview">On track for: ${preview.map(b => `<b>${b.name}</b>`).join(' · ')}</div>`
+          : `<div class="incu-bonus-preview incu-bonus-hint">Focus on one game — or play them all evenly — to earn a hatching bonus</div>`;
+      })()}
       <div class="incu-stats-summary">
         <div class="iss-item" style="color:#f97316"><span>Warmth</span> <b>${incu.stats.warmth}</b></div>
         <div class="iss-item" style="color:#10b981"><span>Comfort</span> <b>${incu.stats.comfort}</b></div>
@@ -1136,26 +1249,156 @@ function hatchCelebration(def) {
 // ACCOUNTS — optional cloud login and save sync
 // =====================================================
 
-// Decide between the local save and the cloud save after signing in.
-// Newest wins; the loser is kept as a backup rather than discarded.
-async function syncAfterSignIn() {
+// Decide between the device save and the account save after signing in.
+// A device can be shared, so the save on it isn't necessarily this
+// player's. Saves record their owner:
+//   - this player's        -> the device wins only if the account hasn't
+//                             moved on since this device last synced
+//                             (cloudBase); otherwise the account wins
+//   - another account's    -> parked for its owner, never uploaded here,
+//                             and restored when they next sign in here
+//   - nobody's (played signed-out):
+//        account empty     -> adopt it (the "made an account later" case)
+//        account has a beast -> ask which to keep
+// Timestamps alone can't decide: opening an old device bumps its savedAt
+// (daily bonus, autosave) and would push stale progress over newer.
+// Whatever loses is set aside on the device, never discarded.
+let cloudSyncing = false;
+let cloudRetryTimer = null;
+
+async function syncAfterSignIn({ quiet = false } = {}) {
+  if (cloudSyncing) return;
+  cloudSyncing = true;
+  try { await reconcileCloudSave(quiet); }
+  finally { cloudSyncing = false; }
+}
+
+// Offline at launch: keep playing locally and quietly try again later
+function retryCloudSyncSoon() {
+  clearTimeout(cloudRetryTimer);
+  cloudRetryTimer = setTimeout(() => {
+    if (Cloud.isSignedIn() && !Cloud.isReady()) syncAfterSignIn({ quiet: true });
+  }, 60000);
+}
+
+// Saves set aside during sign-in. Autosave never rotates these, unlike
+// the backup slot. A slot named after an account is restored when that
+// account signs in here; 'guest' and 'replaced' are safety copies.
+const STASH_PREFIX = 'hatchbound_stash_';
+function stashSave(data, slot) {
+  if (!hasBeast(data)) return;
+  try { localStorage.setItem(STASH_PREFIX + slot, JSON.stringify(data)); } catch {}
+}
+function takeStash(slot) {
+  try {
+    const raw = localStorage.getItem(STASH_PREFIX + slot);
+    if (!raw) return null;
+    localStorage.removeItem(STASH_PREFIX + slot);
+    return JSON.parse(raw);
+  } catch { return null; }
+}
+function hasBeast(s) { return !!(s && (s.creature || s.incubation)); }
+
+// Remember which cloud version this device holds, so the next sign-in can
+// tell "the account moved on elsewhere" from "this device is ahead"
+Cloud.onPushed(data => {
+  G.cloudBase = data.savedAt || 0;
+  try {
+    const stored = JSON.parse(localStorage.getItem(SAVE_KEY) || 'null');
+    if (stored && stored.owner === data.owner) {
+      stored.cloudBase = G.cloudBase;
+      localStorage.setItem(SAVE_KEY, JSON.stringify(stored));
+    }
+  } catch {}
+});
+
+async function reconcileCloudSave(quiet) {
+  Cloud.setReady(false);
   let cloudSave = null;
   try { cloudSave = await Cloud.pull(); }
-  catch (e) { console.warn('cloud pull failed', e.message); showToast("Couldn't reach the cloud — playing locally", 4000); return; }
+  catch (e) {
+    console.warn('cloud pull failed', e.message);
+    if (!quiet) showToast("Couldn't reach the cloud — playing locally", 4000);
+    retryCloudSyncSoon();
+    return;   // stay not-ready: nothing is uploaded until we can reconcile
+  }
+
+  // pull() drops a session whose login has expired. Without an account
+  // there's nothing to reconcile against — and treating uid as null would
+  // mistake this player's own beast for someone else's.
+  const uid = Cloud.userId();
+  if (!Cloud.isSignedIn() || !uid) {
+    showToast('Your login expired — sign in again to keep syncing', 4500);
+    if (G.screen === 'title' || G.screen === 'account') showScreen(G.screen);
+    return;
+  }
 
   const local = readLocalSave();
-  const cloudAt = (cloudSave && cloudSave.savedAt) || 0;
-  const localAt = (local && local.savedAt) || 0;
+  if (local && local.owner && local.owner !== uid) stashSave(local, local.owner);
+  const guest = local && !local.owner && hasBeast(local) ? local : null;
+  // This player's own progress on this device: live, or parked when
+  // someone else signed in here after them
+  const mine = guest ? null : (local && local.owner === uid ? local : takeStash(uid));
+  const describe = s => s && s.creature
+    ? `${esc(s.creature.name)} (Lv.${s.creature.level})`
+    : (s && s.incubation ? 'an unhatched egg' : 'no beast');
 
-  if (cloudSave && cloudAt >= localAt) {
-    if (local) { try { localStorage.setItem(SAVE_BACKUP_KEY, JSON.stringify(local)); } catch {} }
-    applySaveData(cloudSave);
-    try { localStorage.setItem(SAVE_KEY, JSON.stringify(cloudSave)); } catch {}
-    showToast('Character loaded from your account!', 3500);
-  } else if (local) {
-    try { await Cloud.push(local); showToast('Progress backed up to your account!', 3500); }
-    catch (e) { console.warn('cloud push failed', e.message); }
+  let pick;
+  if (guest) {
+    if (!hasBeast(cloudSave)) {
+      pick = guest;
+    } else {
+      const keepDevice = await confirmDialog({
+        title: 'Which beast is yours?',
+        body: `Your account has <b>${describe(cloudSave)}</b>. This device has <b>${describe(guest)}</b>, ` +
+              `played without signing in. Keep one — the other is set aside on this device.`,
+        confirm: `Keep ${guest.creature ? esc(guest.creature.name) : 'this device’s'}`,
+        cancel: `Keep ${cloudSave.creature ? esc(cloudSave.creature.name) : 'my account’s'}`
+      });
+      pick = keepDevice ? guest : cloudSave;
+      if (keepDevice) stashSave(cloudSave, 'replaced');
+      else stashSave(guest, 'guest');
+    }
+  } else if (mine && (!cloudSave || (mine.savedAt || 0) === (cloudSave.savedAt || 0))) {
+    pick = mine;   // account empty, or already in sync
+  } else if (mine && cloudSave) {
+    const cloudAt = cloudSave.savedAt || 0;
+    const deviceAhead = cloudAt <= (mine.cloudBase || 0);
+    pick = deviceAhead ? mine : cloudSave;
+    if (!deviceAhead) stashSave(mine, 'replaced');
+  } else if (cloudSave) {
+    pick = cloudSave;
+  } else {
+    // Nothing anywhere for this account. An unlinked save with coins but
+    // no beast still carries over; someone else's never does.
+    pick = local && !local.owner ? local : null;
   }
+
+  const changed = pick !== local;
+  if (pick && pick === cloudSave) {
+    applySaveData(cloudSave);
+    G.cloudBase = cloudSave.savedAt || 0;
+  } else if (pick) {
+    if (changed) applySaveData(pick);
+    try { await Cloud.push({ ...pick, owner: uid }); }
+    catch (e) { console.warn('cloud push failed', e.message); }
+    if (pick === guest) showToast('Progress saved to your account!', 3500);
+  } else {
+    applySaveData({});
+    G.creature = null; G.incubation = null;
+  }
+
+  G.owner = uid;
+  Cloud.setReady(true);
+  saveGame();
+  if (quiet && changed) {
+    // Came back online mid-session and the account had newer progress
+    showToast('Loaded your latest progress from your account', 4000);
+    showScreen('title');
+    return;
+  }
+  showToast(quiet ? 'Back online — progress synced' : 'Signed in — your beast is saved to your account', 3500);
+  if (G.screen === 'title' || G.screen === 'account') showScreen(G.screen);
 }
 
 function renderAccount() {
@@ -1187,7 +1430,7 @@ function renderAccount() {
       </div>
       <div class="account-box">
         <div class="acct-title">Signed in</div>
-        <div class="acct-email">${Cloud.email() || ''}</div>
+        <div class="acct-email">${esc(Cloud.email() || '')}</div>
         <p class="acct-note">Your progress saves to your account automatically. Sign in on any
         phone or computer and your beast will be waiting.</p>
         <button class="btn-primary" onclick="showScreen('title')">Continue Playing</button>
@@ -1269,17 +1512,38 @@ function renderAccount() {
   });
 }
 
-function doSignOut() {
-  Cloud.signOut();
-  showToast('Signed out. This device keeps its own save.', 4000);
+async function doSignOut() {
+  const synced = await Cloud.signOut(collectSaveData());
+  if (synced) {
+    // Safely in the account — clear the device so the next person to pick
+    // it up starts fresh instead of playing (and saving over) this beast.
+    try { localStorage.removeItem(SAVE_KEY); localStorage.removeItem(SAVE_BACKUP_KEY); } catch {}
+    applySaveData({});
+    G.creature = null; G.incubation = null;
+    showToast('Signed out. Your beast is safe in your account.', 4000);
+  } else {
+    showToast("Signed out — couldn't reach the cloud, so this device kept its save.", 5000);
+  }
   renderAccount();
 }
 
 // ---- Screen Router ----
+// The page body is the scroller, so without this a screen opens wherever
+// the previous one was scrolled to.
+function resetScroll() {
+  for (const el of [document.scrollingElement, document.body]) {
+    if (!el) continue;
+    el.style.scrollBehavior = 'auto';   // jump, don't smooth-scroll
+    el.scrollTop = 0;
+    el.style.scrollBehavior = '';
+  }
+}
+
 function showScreen(id, data = {}) {
   G.screen = id;
   if (typeof FX !== 'undefined') FX.setTheme(id);
   document.querySelectorAll('.screen').forEach(s => s.classList.remove('active'));
+  resetScroll();
   const target = document.getElementById('screen-' + id);
   if (target) {
     target.classList.add('active');
@@ -1307,7 +1571,18 @@ const SCREENS = {
   title() {
     const hasProgress = !!(G.creature || G.incubation);
     const cont = document.getElementById('btn-continue');
+    const fresh = document.getElementById('btn-new-game');
     if (cont) cont.style.display = hasProgress ? 'block' : 'none';
+    // Returning players: Continue is the big primary button, New Journey
+    // becomes secondary and sits below it.
+    if (cont && fresh) {
+      cont.className = hasProgress ? 'btn-primary' : 'btn-secondary';
+      fresh.className = hasProgress ? 'btn-secondary' : 'btn-primary';
+      if (hasProgress && cont.nextElementSibling !== fresh) cont.after(fresh);
+      if (!hasProgress && fresh.nextElementSibling !== cont) fresh.after(cont);
+      if (hasProgress && G.creature) cont.textContent = `⚡ Continue with ${G.creature.name}`;
+      else if (hasProgress) cont.textContent = '⚡ Continue Incubating';
+    }
     const acct = document.getElementById('btn-account');
     if (acct) {
       acct.textContent = Cloud.isSignedIn()
@@ -1382,13 +1657,13 @@ const SCREENS = {
       grid.appendChild(card);
     });
 
-    grid.addEventListener('click', e => {
+    grid.onclick = e => {
       const btn = e.target.closest('.btn-choose-creature');
       if (btn) {
         G.selectedCreature = btn.dataset.id;
         showScreen('name-creature');
       }
-    });
+    };
   },
 
   'name-creature'() {
@@ -1417,6 +1692,11 @@ const SCREENS = {
 
   hatching() {
     if (!G.incubation && !G.creature) { showScreen('title'); return; }
+    const meetBtn = document.getElementById('btn-after-hatch');
+    if (meetBtn) {
+      meetBtn.style.display = 'none';
+      setTimeout(() => { if (G.screen === 'hatching') meetBtn.style.display = 'block'; }, 4500);
+    }
     const bonuses = hatchEgg() || G.creature.incubationBonuses || [];
     const def = CREATURES[G.creature.id];
     const container = document.getElementById('hatch-container');
@@ -1432,7 +1712,7 @@ const SCREENS = {
           <div class="hatch-sprite" style="filter:drop-shadow(0 0 30px ${def.glow})">
             ${getSpriteHTML(G.creature.id, 'baby', 150)}
           </div>
-          <div class="hatch-name">${G.creature.name}</div>
+          <div class="hatch-name">${esc(G.creature.name)}</div>
           <div class="hatch-subtitle">A ${def.stages.baby.name} hatched!</div>
         </div>
         ${bonuses.length ? `
@@ -1454,7 +1734,7 @@ const SCREENS = {
       SFX.hatch();
       if (typeof FX !== 'undefined') { FX.flash('rgba(255,250,220,0.85)', 700); FX.shake(12); }
       hatchCelebration(def);
-      setTimeout(() => hype(`${G.creature.name} IS BORN!`, def.color), 700);
+      setTimeout(() => hype(`${esc(G.creature.name)} IS BORN!`, def.color), 700);
     }, 2500);
     setTimeout(() => {
       const bonusEl = document.getElementById('hatch-bonuses');
@@ -1463,8 +1743,8 @@ const SCREENS = {
   },
 
   home() {
-    renderHome();
     drainStats();
+    renderHome();
     if (G._homeTimer) clearInterval(G._homeTimer);
     G._homeTimer = setInterval(() => {
       if (G.screen !== 'home') { clearInterval(G._homeTimer); return; }
@@ -1517,9 +1797,11 @@ const SCREENS = {
 
 // ---- Daily streak: reward returning players ----
 function checkDailyStreak() {
-  const today = new Date().toISOString().slice(0, 10);
+  const now = new Date();
+  const today = localDateKey(now);
   if (G.daily.last === today) return;
-  const yesterday = new Date(Date.now() - 86400000).toISOString().slice(0, 10);
+  // Built from calendar parts, so DST changes can't skip or repeat a day
+  const yesterday = localDateKey(new Date(now.getFullYear(), now.getMonth(), now.getDate() - 1));
   G.daily.streak = (G.daily.last === yesterday) ? (G.daily.streak || 0) + 1 : 1;
   G.daily.last = today;
   const reward = 20 + 10 * Math.min(G.daily.streak - 1, 6);
@@ -1591,13 +1873,34 @@ function showInstructions(key, title, lines, onStart) {
     if (ov.querySelector('#ib-hide-check').checked) {
       G.settings.instructions = false;
       saveGame();
-      showToast('Instructions off — re-enable any time by holding the game card');
+      showToast('Instructions off — turn them back on in Profile → Settings', 3500);
     }
     ov.remove();
     SFX.good();
     onStart();
   });
   document.body.appendChild(ov);
+}
+
+// ---- Confirm dialog ----
+function confirmDialog({ title, body, confirm = 'OK', cancel = 'Cancel', danger = false }) {
+  return new Promise(resolve => {
+    const ov = document.createElement('div');
+    ov.className = 'instructions-overlay confirm-overlay';
+    ov.innerHTML = `
+      <div class="instructions-box confirm-box" role="dialog" aria-modal="true">
+        <div class="ib-title">${title}</div>
+        <p class="confirm-body">${body}</p>
+        <button class="${danger ? 'btn-danger' : 'btn-primary'} cd-yes">${confirm}</button>
+        <button class="btn-secondary cd-no" style="margin-top:10px">${cancel}</button>
+      </div>`;
+    const done = v => { ov.remove(); resolve(v); };
+    ov.querySelector('.cd-yes').addEventListener('click', () => done(true));
+    ov.querySelector('.cd-no').addEventListener('click', () => done(false));
+    ov.addEventListener('click', e => { if (e.target === ov) done(false); });
+    document.body.appendChild(ov);
+    ov.querySelector('.cd-no').focus();
+  });
 }
 
 // ---- Liveliness helpers ----
@@ -1686,7 +1989,10 @@ function checkEvolutionNotice() {
       <div class="evolve-sprite" style="filter:drop-shadow(0 0 34px ${def.glow})">
         ${getSpriteHTML(G.creature.id, note.stage.id, 170)}
       </div>
-      <div class="evolve-name">${G.creature.name} evolved into<br><b>${stageInfo ? stageInfo.name : note.stage.name}</b>!</div>
+      <div class="evolve-name">${esc(G.creature.name)} evolved into<br><b>${stageInfo ? stageInfo.name : note.stage.name}</b>!</div>
+      ${note.path && EVOLUTION_PATHS[note.path] ? `
+        <div class="evolve-path">${EVOLUTION_PATHS[note.path].icon} Raised as a <b>${EVOLUTION_PATHS[note.path].name}</b>
+          <span>${EVOLUTION_PATHS[note.path].label} — permanent</span></div>` : ''}
       <button class="btn-primary" style="max-width:220px">Amazing!</button>
     </div>`;
   overlay.querySelector('button').addEventListener('click', () => {
@@ -1746,11 +2052,11 @@ function renderHome() {
     <div class="creature-stage">
       <div class="creature-aura" style="background:radial-gradient(circle, ${def.glow} 0%, transparent 70%)"></div>
       <div class="creature-main-sprite" id="home-creature-sprite"
-           style="filter:${glowFilter} ${tintFilter}" onclick="pokeCreature()" title="Pet ${c.name}!">
+           style="filter:${glowFilter} ${tintFilter}" onclick="pokeCreature()" title="Pet ${esc(c.name)}!">
         ${getSpriteHTML(c.id, stageDef.id, Math.min(150, 100 + Math.floor(c.level * 0.5)))}
       </div>
       ${gearBadges ? `<div class="creature-gear-badges">${gearBadges}</div>` : ''}
-      <div class="creature-name-display">${c.name}</div>
+      <div class="creature-name-display">${esc(c.name)}</div>
       <div class="creature-subtitle">${stageInfo ? stageInfo.name : ''} · ${def.title}</div>
       <div class="personality-badge" style="background:rgba(255,255,255,0.08)">
         ${pers.icon} ${pers.name} · <span class="elem-text" style="color:${elem.color}">${elem.icon} ${elem.name}</span>
@@ -1813,9 +2119,19 @@ function renderHome() {
       <button class="btn-collection" onclick="showScreen('collection')">📖 Codex</button>
     </div>
 
-    <div class="evolution-hint">
-      Evolution tendency: <b>${evPath.charAt(0).toUpperCase() + evPath.slice(1)}</b> path
-    </div>
+    ${(() => {
+      const next = STAGES.find(s => s.min > c.level);
+      if (!next) {
+        const locked = (c.evolutionPaths || []).map(p => EVOLUTION_PATHS[p.path]).filter(Boolean);
+        return locked.length
+          ? `<div class="evolution-hint">Fully evolved · ${locked.map(p => `${p.icon} ${p.name}`).join(' · ')}</div>` : '';
+      }
+      const p = evPath && EVOLUTION_PATHS[evPath];
+      return `<div class="evolution-hint">
+        ${p ? `Evolving at Lv.${next.min} as a <b>${p.icon} ${p.name}</b> (${p.label}) — from ${p.via}`
+            : `Evolves at Lv.${next.min} · train, care or battle to shape its path`}
+      </div>`;
+    })()}
   `;
 
   checkEvolutionNotice();
@@ -1963,7 +2279,8 @@ function doPlayAction() {
       }
     }, 1200);
 
-    ball.addEventListener('click', () => {
+    ball.addEventListener('pointerdown', () => {
+      if (ball.classList.contains('ball-caught') || ball.classList.contains('ball-miss')) return;
       clearTimeout(timeout);
       SFX.pop();
       catches++;
@@ -1980,12 +2297,27 @@ function doPlayAction() {
 }
 
 // ---- Training Screen ----
-let trainingGame = null;
+// Training costs energy, so it ties back into care: a tired beast has to
+// rest before it can train again. (It used to be free and unlimited.)
+const TRAIN_ENERGY_COST = 15;
+const TRAIN_HUNGER_COST = 5;
+
+// Session token, like the incubation games: bumped whenever a session ends
+// or the screen changes, so any timer still running from an old session
+// sees it's stale and stops. Without this, leaving mid-game let the timers
+// finish in the background, pay out, and force-navigate the player home.
+let trainToken = 0;
+function trainActive(t) { return t === trainToken && G.screen === 'train'; }
+
 function renderTrainScreen() {
+  trainToken++;
   const el = document.getElementById('train-content');
   if (!el) return;
   ensureCreatureFields(G.creature);
-  const ts = G.creature.trainedStats;
+  drainStats();
+  const c = G.creature;
+  const ts = c.trainedStats;
+  const tired = c.energy < TRAIN_ENERGY_COST;
   el.innerHTML = `
     <div class="train-header">
       <button class="btn-back" onclick="showScreen('home')">← Back</button>
@@ -1997,24 +2329,28 @@ function renderTrainScreen() {
       <div class="tsb-item"><span>💨 SPD</span><b>+${ts.spd}</b><i>/${TRAIN_STAT_CAP}</i></div>
       <div class="tsb-item"><span>💗 HP</span><b>+${ts.hp * 2}</b><i>/${TRAIN_STAT_CAP * 2}</i></div>
     </div>
-    <div class="train-games-grid">
+    <div class="train-energy ${tired ? 'train-energy-low' : ''}">
+      ⚡ Energy ${Math.round(c.energy)}% · each session costs ${TRAIN_ENERGY_COST}
+      ${tired ? `<button class="btn-secondary train-rest-btn" onclick="showScreen('home')">Too tired — go Rest</button>` : ''}
+    </div>
+    <div class="train-games-grid ${tired ? 'train-locked' : ''}">
       <div class="train-game-card" onclick="startTrainingGame('reflex')">
         <div class="tg-icon">⚡</div>
         <div class="tg-name">Reflex Strike</div>
         <div class="tg-desc">Tap the flash! Builds SPD + ATK permanently</div>
-        <div class="tg-reward">+20 XP per flash · up to +4 SPD</div>
+        <div class="tg-reward">up to +160 XP · +4 SPD +2 ATK</div>
       </div>
       <div class="train-game-card" onclick="startTrainingGame('endurance')">
         <div class="tg-icon">🔥</div>
         <div class="tg-name">Endurance Burn</div>
         <div class="tg-desc">Hold as long as possible! Builds HP + DEF permanently</div>
-        <div class="tg-reward">+5 XP per second · up to +8 HP</div>
+        <div class="tg-reward">up to +150 XP · +8 HP +2 DEF</div>
       </div>
       <div class="train-game-card" onclick="startTrainingGame('focus')">
         <div class="tg-icon">🎯</div>
         <div class="tg-name">Focus Target</div>
         <div class="tg-desc">Hit moving targets! Builds ATK + SPD permanently</div>
-        <div class="tg-reward">+15 XP per hit · up to +4 ATK</div>
+        <div class="tg-reward">up to +90 XP · +4 ATK +2 SPD</div>
       </div>
     </div>
     <div id="training-game-area" class="training-game-area hidden"></div>
@@ -2024,114 +2360,146 @@ function renderTrainScreen() {
 const TRAIN_INSTRUCTIONS = {
   reflex: ['Reflex Strike', ['Wait for the circle to flash', 'Tap it the INSTANT it lights up', 'The window is short — stay sharp!', 'Builds SPD and ATK permanently']],
   endurance: ['Endurance Burn', ['Press and HOLD the button', 'Hold as long as you can — up to 30 seconds', 'Letting go ends the session', 'Builds HP and DEF permanently']],
-  focus: ['Focus Target', ['Targets appear and vanish quickly', 'Tap them before they disappear', 'They get faster — stay locked in!', 'Builds ATK and SPD permanently']]
+  focus: ['Focus Target', ['Targets appear and vanish quickly', 'Tap them before they disappear', 'Six targets — hit as many as you can', 'Builds ATK and SPD permanently']]
 };
 
 function startTrainingGame(type) {
+  const c = G.creature;
+  if (!c) return;
+  drainStats();
+  if (c.energy < TRAIN_ENERGY_COST) {
+    showToast(`${c.name} is too tired to train — Rest first!`, 3000);
+    return;
+  }
   const [title, lines] = TRAIN_INSTRUCTIONS[type] || ['Training', []];
   showInstructions(type, title, lines, () => {
+    if (G.screen !== 'train') return;
     const area = document.getElementById('training-game-area');
     if (!area) return;
+    // Pay the cost up front so quitting can't dodge it
+    c.energy = Math.max(0, c.energy - TRAIN_ENERGY_COST);
+    c.hunger = Math.max(0, c.hunger - TRAIN_HUNGER_COST);
+    saveGame();
+    const token = ++trainToken;
+    document.querySelector('.train-games-grid')?.classList.add('hidden');
     area.classList.remove('hidden');
     area.innerHTML = '';
-    if (type === 'reflex') startReflexGame(area);
-    else if (type === 'endurance') startEnduranceGame(area);
-    else if (type === 'focus') startFocusGame(area);
+    if (type === 'reflex') startReflexGame(area, token);
+    else if (type === 'endurance') startEnduranceGame(area, token);
+    else if (type === 'focus') startFocusGame(area, token);
   });
 }
 
-function startReflexGame(area) {
-  let score = 0, hits = 0, total = 8;
+function quitTraining() {
+  trainToken++;   // stops any running timers
+  showToast('Session ended — no rewards this time.');
+  renderTrainScreen();
+}
+
+function startReflexGame(area, token) {
+  let score = 0, total = 8, round = 0;
   let flashing = false;
 
   area.innerHTML = `
     <div class="mini-game reflex-game">
-      <div class="mg-title">Reflex Strike - Tap when it flashes!</div>
-      <div class="mg-score">Score: <span id="rg-score">0</span>  Round: <span id="rg-round">0</span>/${total}</div>
-      <div id="rg-flash" class="reflex-target">TAP!</div>
+      <div class="mg-title">Reflex Strike</div>
+      <div class="mg-score">Score: <span id="rg-score">0</span> · Round: <span id="rg-round">0</span>/${total}</div>
+      <div id="rg-flash" class="reflex-target">WAIT…</div>
       <div id="rg-msg" class="mg-msg"></div>
-      <button class="btn-primary" onclick="endMiniGame('reflex',0)" style="margin-top:12px">Give Up</button>
+      <button class="btn-secondary" onclick="quitTraining()" style="margin-top:12px">Give Up</button>
     </div>
   `;
+  const btn = document.getElementById('rg-flash');
+  const msg = document.getElementById('rg-msg');
+  let missTimer = null;
 
-  let round = 0;
+  // pointerdown fires the instant a finger lands; click waits for release,
+  // which is a real handicap in a reaction test
+  btn.addEventListener('pointerdown', () => {
+    if (!trainActive(token)) return;
+    if (!flashing) { if (msg) msg.textContent = 'Too early!'; return; }
+    clearTimeout(missTimer);
+    flashing = false;
+    btn.classList.remove('active-flash');
+    btn.textContent = 'WAIT…';
+    score += 20;
+    document.getElementById('rg-score').textContent = score;
+    if (msg) msg.textContent = 'Hit! +20 XP';
+    SFX.good();
+    nextFlash();
+  });
+
   function nextFlash() {
-    if (round >= total) { endMiniGame('reflex', score); return; }
-    const delay = 600 + Math.random() * 1800;
+    if (!trainActive(token)) return;
+    if (round >= total) { endMiniGame('reflex', score, token); return; }
     setTimeout(() => {
-      const btn = document.getElementById('rg-flash');
-      if (!btn) return;
+      if (!trainActive(token)) return;
       flashing = true;
       btn.classList.add('active-flash');
+      btn.textContent = 'TAP!';
       document.getElementById('rg-round').textContent = ++round;
-
-      const timeout = setTimeout(() => {
-        if (flashing) {
-          flashing = false;
-          btn.classList.remove('active-flash');
-          document.getElementById('rg-msg').textContent = 'Too slow!';
-          nextFlash();
-        }
-      }, 650);
-
-      btn.onclick = () => {
-        if (!flashing) return;
-        clearTimeout(timeout);
+      missTimer = setTimeout(() => {
+        if (!trainActive(token) || !flashing) return;
         flashing = false;
         btn.classList.remove('active-flash');
-        score += 20;
-        hits++;
-        document.getElementById('rg-score').textContent = score;
-        document.getElementById('rg-msg').textContent = 'Hit! +20 XP';
+        btn.textContent = 'WAIT…';
+        if (msg) msg.textContent = 'Too slow!';
         nextFlash();
-      };
-    }, delay);
+      }, 650);
+    }, 600 + Math.random() * 1800);
   }
   nextFlash();
 }
 
-function startEnduranceGame(area) {
-  let holding = false, xpGained = 0, seconds = 0;
+function startEnduranceGame(area, token) {
+  let holding = false, xpGained = 0, seconds = 0, finished = false;
   let timer;
 
   area.innerHTML = `
     <div class="mini-game endurance-game">
-      <div class="mg-title">Endurance Burn!</div>
-      <div class="mg-score">Held: <span id="eg-sec">0</span>s   XP: <span id="eg-xp">0</span></div>
+      <div class="mg-title">Endurance Burn</div>
+      <div class="mg-score">Held: <span id="eg-sec">0</span>s · XP: <span id="eg-xp">0</span></div>
       <div id="eg-btn" class="endurance-btn">HOLD</div>
-      <div class="mg-msg">Hold the button as long as you can!</div>
+      <div class="mg-msg">Press and hold — let go and it's over!</div>
     </div>
   `;
 
   const btn = document.getElementById('eg-btn');
-  const start = () => {
-    if (holding) return;
-    holding = true;
-    btn.classList.add('holding');
-    timer = setInterval(() => {
-      seconds++;
-      xpGained += 5;
-      document.getElementById('eg-sec').textContent = seconds;
-      document.getElementById('eg-xp').textContent  = xpGained;
-      if (seconds >= 30) { stop(); endMiniGame('endurance', xpGained); }
-    }, 1000);
-  };
-  const stop = () => {
-    if (!holding) return;
+  // One place ends the session, once. It used to be called both by stop()
+  // and again at the 30s cap, which paid every reward twice.
+  const finish = () => {
+    if (finished) return;
+    finished = true;
     holding = false;
     clearInterval(timer);
     btn.classList.remove('holding');
-    endMiniGame('endurance', xpGained);
+    endMiniGame('endurance', xpGained, token);
   };
+  const start = e => {
+    if (e) e.preventDefault();
+    if (holding || finished || !trainActive(token)) return;
+    holding = true;
+    btn.classList.add('holding');
+    timer = setInterval(() => {
+      if (!trainActive(token)) { clearInterval(timer); return; }
+      seconds++;
+      xpGained += 5;
+      document.getElementById('eg-sec').textContent = seconds;
+      document.getElementById('eg-xp').textContent = xpGained;
+      if (seconds === 15) hypePraise();
+      if (seconds >= 30) finish();
+    }, 1000);
+  };
+  const stop = () => { if (holding) finish(); };
 
-  btn.addEventListener('mousedown', start);
-  btn.addEventListener('touchstart', e => { e.preventDefault(); start(); });
-  btn.addEventListener('mouseup', stop);
-  btn.addEventListener('mouseleave', stop);
-  btn.addEventListener('touchend', stop);
+  btn.addEventListener('pointerdown', start);
+  btn.addEventListener('pointerup', stop);
+  btn.addEventListener('pointerleave', stop);
+  btn.addEventListener('pointercancel', stop);
+  btn.addEventListener('contextmenu', e => e.preventDefault());  // long-press menu on phones
 }
 
-function startFocusGame(area) {
+function startFocusGame(area, token) {
   let score = 0, round = 0, total = 6;
 
   area.innerHTML = `
@@ -2140,11 +2508,13 @@ function startFocusGame(area) {
       <div class="mg-score">Hits: <span id="fg-score">0</span> / ${total}</div>
       <div id="fg-arena" class="focus-arena"></div>
       <div id="fg-msg" class="mg-msg">Tap the targets!</div>
+      <button class="btn-secondary" onclick="quitTraining()" style="margin-top:12px">Give Up</button>
     </div>
   `;
 
   function spawnTarget() {
-    if (round >= total) { endMiniGame('focus', score * 15); return; }
+    if (!trainActive(token)) return;
+    if (round >= total) { endMiniGame('focus', score * 15, token); return; }
     round++;
     const arena = document.getElementById('fg-arena');
     if (!arena) return;
@@ -2155,18 +2525,27 @@ function startFocusGame(area) {
     target.textContent = '🎯';
     arena.appendChild(target);
 
+    let done = false;
     const to = setTimeout(() => {
-      if (target.parentNode) target.remove();
-      document.getElementById('fg-msg').textContent = 'Missed!';
+      if (done) return;
+      done = true;
+      target.remove();
+      if (!trainActive(token)) return;
+      const m = document.getElementById('fg-msg');
+      if (m) m.textContent = 'Missed!';
       spawnTarget();
     }, 850);
 
-    target.addEventListener('click', () => {
+    target.addEventListener('pointerdown', () => {
+      if (done || !trainActive(token)) return;
+      done = true;
       clearTimeout(to);
       target.remove();
       score++;
+      SFX.pop();
       document.getElementById('fg-score').textContent = score;
-      document.getElementById('fg-msg').textContent = 'Hit! +15 XP';
+      const m = document.getElementById('fg-msg');
+      if (m) m.textContent = 'Hit! +15 XP';
       spawnTarget();
     });
   }
@@ -2177,19 +2556,26 @@ function startFocusGame(area) {
 const TRAIN_STAT_CAP = 60;
 const TRAIN_GAINS = {
   reflex:    { primary: 'spd', secondary: 'atk', maxScore: 160 },
-  endurance: { primary: 'hp',  secondary: 'def', maxScore: 100 },
+  endurance: { primary: 'hp',  secondary: 'def', maxScore: 150 },
   focus:     { primary: 'atk', secondary: 'spd', maxScore: 90 }
 };
 
-function endMiniGame(type, xpGained) {
+function endMiniGame(type, xpGained, token) {
+  // Only a live session pays out, and only once
+  if (token !== undefined && !trainActive(token)) return;
+  trainToken++;
+
   const c = G.creature;
+  if (!c) return;
   c.trainingCount++;
   ensureCreatureFields(c);
+  trackActivity('training');
 
-  // Stat gains scale with performance: 0-4 primary, up to 2 secondary
+  // Stat gains scale with performance: 1-4 primary (endurance: 1-8 HP),
+  // up to 2 secondary. A zero score still teaches a little.
   const cfg = TRAIN_GAINS[type];
   let gainMsg = '';
-  if (cfg && xpGained > 0) {
+  if (cfg) {
     const ratio = Math.min(1, xpGained / cfg.maxScore);
     const pGain = Math.max(1, Math.round(ratio * 4));
     const sGain = Math.round(ratio * 2);
@@ -2198,7 +2584,7 @@ function endMiniGame(type, xpGained) {
     if (ts[cfg.primary] < TRAIN_STAT_CAP) {
       const g = Math.min(pGain, TRAIN_STAT_CAP - ts[cfg.primary]);
       ts[cfg.primary] += g;
-      applied.push(`+${g} ${cfg.primary.toUpperCase()}`);
+      applied.push(`+${cfg.primary === 'hp' ? g * 2 : g} ${cfg.primary.toUpperCase()}`);
     }
     if (sGain > 0 && ts[cfg.secondary] < TRAIN_STAT_CAP) {
       const g = Math.min(sGain, TRAIN_STAT_CAP - ts[cfg.secondary]);
@@ -2206,13 +2592,14 @@ function endMiniGame(type, xpGained) {
       applied.push(`+${g} ${cfg.secondary.toUpperCase()}`);
     }
     gainMsg = applied.length ? ` ${applied.join(' ')}` : ' (stats maxed!)';
+    gameEndHype(ratio);
   }
 
   grantXP(xpGained);
   saveGame();
-  if (cfg) gameEndHype(xpGained > 0 ? Math.min(1, xpGained / cfg.maxScore) : 0);
   showToast(`Training complete! +${xpGained} XP!${gainMsg}`, 3200);
-  setTimeout(() => { renderHome(); showScreen('home'); }, 1600);
+  // Back to the Training Center so another session is one tap away
+  setTimeout(() => { if (G.screen === 'train') renderTrainScreen(); }, 1600);
 }
 
 // ---- Battle Prep ----
@@ -2238,8 +2625,11 @@ function renderBattlePrep() {
       statMods: camp.statMods
     };
   } else {
-    const oppIdx = Math.floor(Math.random() * AI_OPPONENTS.length);
-    G.opponent = { ...AI_OPPONENTS[oppIdx] };
+    const rival = AI_OPPONENTS[Math.floor(Math.random() * AI_OPPONENTS.length)];
+    const stage = stageFromLevel(G.creature.level);
+    let lv = G.creature.level + (Math.floor(Math.random() * 3) - 1);
+    lv = Math.max(1, Math.max(stage.min, Math.min(stage.max, lv)));
+    G.opponent = { ...rival, level: lv };
   }
   G.opponent.id = G.opponent.creature;
   const oppDef = CREATURES[G.opponent.creature];
@@ -2257,7 +2647,7 @@ function renderBattlePrep() {
         <div class="bp-fighter-sprite" style="filter:drop-shadow(0 0 16px ${def.glow})">
           ${getSpriteHTML(G.creature.id, stageFromLevel(G.creature.level).id, 72)}
         </div>
-        <div class="bp-fighter-name">${G.creature.name}</div>
+        <div class="bp-fighter-name">${esc(G.creature.name)}</div>
         <div class="bp-fighter-level">Lv.${G.creature.level}</div>
       </div>
       <div class="bp-vs">VS</div>
@@ -2272,6 +2662,14 @@ function renderBattlePrep() {
     </div>
 
     <div class="opponent-taunt">"${G.opponent.message}"</div>
+    ${(() => {
+      drainStats();
+      const conds = Battle.conditionOf(G.creature);
+      if (!conds.length) return '';
+      return `<div class="bp-conditions">${conds.map(cd =>
+        `<span class="bp-cond ${cd.bad ? 'bp-cond-bad' : 'bp-cond-good'}">${cd.bad ? '⚠️' : '✨'} ${cd.label}: ${cd.effect}</span>`
+      ).join('')}${conds.some(cd => cd.bad) ? `<div class="bp-cond-tip">Feed and rest ${esc(G.creature.name)} at camp to fight at full strength.</div>` : ''}</div>`;
+    })()}
 
     <div class="bp-section">
       <div class="bp-section-title">Choose 3 Moves</div>
@@ -2309,13 +2707,13 @@ function renderBattlePrep() {
     <div class="bp-section">
       <div class="bp-section-title">Battle Item</div>
       <div class="item-row">
-        <button class="item-btn ${!G.selectedItem ? 'active' : ''}" onclick="selectItem(null)">None</button>
+        <button class="item-btn ${!G.selectedItem ? 'active' : ''}" onclick="selectItem(null, this)">None</button>
         ${['bandage','focus_berry','smoke_cloud'].map(itemId => {
           const item = ITEMS[itemId];
           if (!G.inventory.includes(itemId)) return '';
           return `
             <button class="item-btn ${G.selectedItem === itemId ? 'active' : ''}"
-                    onclick="selectItem('${itemId}')">
+                    onclick="selectItem('${itemId}', this)">
               ${item.icon} ${item.name}
             </button>
           `;
@@ -2352,10 +2750,23 @@ function setStance(s) {
   });
 }
 
-function selectItem(itemId) {
+function selectItem(itemId, btn) {
   G.selectedItem = itemId;
   document.querySelectorAll('.item-btn').forEach(b => b.classList.remove('active'));
-  event.target.classList.add('active');
+  if (btn) btn.classList.add('active');
+}
+
+function toggleBattleSpeed(btn) {
+  const s = Battle.setSpeed(Battle.getSpeed() > 1 ? 1 : 2);
+  if (!G.settings) G.settings = {};
+  G.settings.battleSpeed = s;
+  saveGame();
+  if (btn) btn.textContent = s > 1 ? '⏩ 2x' : '▶ 1x';
+}
+
+function skipBattle(btn) {
+  Battle.skip();
+  if (btn) btn.disabled = true;
 }
 
 function startBattle() {
@@ -2375,8 +2786,23 @@ function renderBattleScreen() {
   const el = document.getElementById('battle-content');
   if (!el) return;
 
-  const oppMaxHp = Math.floor(oppDef.baseStats.maxHp * (1 + (G.opponent.level - 1) * 0.03));
   const tintFilter = G.creature.colorTint ? `hue-rotate(${G.creature.colorTint}deg)` : '';
+
+  drainStats();
+  const campMods = G.battleMode && G.battleMode.type === 'campaign'
+    ? { playerHpPct: getCampaignLevel(G.battleMode.level).playerHpPct } : null;
+  Battle.init(G.selectedMoves, G.stance, G.selectedItem, campMods);
+  const opponentCreature = {
+    id: G.opponent.creature,
+    name: G.opponent.name || CREATURES[G.opponent.creature].name,
+    level: G.opponent.level,
+    personality: CREATURES[G.opponent.creature].personality,
+    trainingCount: 0,
+    statMods: G.opponent.statMods || null
+  };
+  const match = Battle.prepare(G.creature, opponentCreature);
+  const pStartPct = Math.round(100 * match.player.hp / match.player.maxHp);
+  Battle.setSpeed((G.settings && G.settings.battleSpeed) || 1);
 
   el.innerHTML = `
     <div class="battle-arena">
@@ -2402,10 +2828,10 @@ function renderBattleScreen() {
           <div class="bib-hp-row">
             <span class="bib-hp-label">HP</span>
             <div class="bib-hp-track">
-              <div class="bib-hp-fill" id="battle-opp-hpbar" style="width:100%;background:#3a9e38"></div>
+              <div class="bib-hp-fill" id="battle-opp-hpbar" style="width:100%;background:#10b981"></div>
             </div>
           </div>
-          <div class="bib-hp-num" id="battle-opp-hp">${oppMaxHp}/${oppMaxHp}</div>
+          <div class="bib-hp-num" id="battle-opp-hp">${match.opponent.hp}/${match.opponent.maxHp}</div>
         </div>
         <div class="opp-sprite-area" id="battle-opp-sprite">
           ${getSpriteHTML(G.opponent.creature, oppStage.id, 110)}
@@ -2420,16 +2846,16 @@ function renderBattleScreen() {
         </div>
         <div class="battle-infobox player-infobox">
           <div class="bib-name-row">
-            <span class="bib-name">${G.creature.name}</span>
+            <span class="bib-name">${esc(G.creature.name)}</span>
             <span class="bib-level">Lv.${G.creature.level}</span>
           </div>
           <div class="bib-hp-row">
             <span class="bib-hp-label">HP</span>
             <div class="bib-hp-track">
-              <div class="bib-hp-fill" id="battle-player-hpbar" style="width:${(G.creature.hp/G.creature.maxHp)*100}%;background:#3a9e38"></div>
+              <div class="bib-hp-fill" id="battle-player-hpbar" style="width:${pStartPct}%;background:${pStartPct > 60 ? '#10b981' : '#f59e0b'}"></div>
             </div>
           </div>
-          <div class="bib-hp-num" id="battle-player-hp">${G.creature.hp}/${G.creature.maxHp}</div>
+          <div class="bib-hp-num" id="battle-player-hp">${match.player.hp}/${match.player.maxHp}</div>
         </div>
       </div>
 
@@ -2441,12 +2867,15 @@ function renderBattleScreen() {
       <!-- Attack visual effects layer -->
       <div class="battle-fx-layer" id="battle-fx-layer"></div>
 
+      <!-- Playback speed -->
+      <div class="battle-speed">
+        <button class="bs-btn" id="bs-speed" onclick="toggleBattleSpeed(this)">${Battle.getSpeed() > 1 ? '⏩ 2x' : '▶ 1x'}</button>
+        <button class="bs-btn" id="bs-skip" onclick="skipBattle(this)">⏭ Skip</button>
+      </div>
+
     </div>
   `;
 
-  const campMods = G.battleMode && G.battleMode.type === 'campaign'
-    ? { playerHpPct: getCampaignLevel(G.battleMode.level).playerHpPct } : null;
-  Battle.init(G.selectedMoves, G.stance, G.selectedItem, campMods);
   Battle.setElements(
     document.getElementById('battle-log'),
     document.getElementById('battle-player-hpbar'),
@@ -2457,24 +2886,22 @@ function renderBattleScreen() {
     document.getElementById('battle-opp-sprite')
   );
 
-  const opponentCreature = {
-    id: G.opponent.creature,
-    name: CREATURES[G.opponent.creature].name,
-    level: G.opponent.level,
-    personality: CREATURES[G.opponent.creature].personality,
-    trainingCount: 0,
-    statMods: G.opponent.statMods || null
-  };
-
-  Battle.run(G.creature, opponentCreature).then(result => {
+  Battle.run(match).then(result => {
+    document.querySelector('.battle-speed')?.remove();
     G.battleResult = result;
     G.creature.battleCount++;
+    trackActivity('battle');
     const camp = G.battleMode && G.battleMode.type === 'campaign'
       ? getCampaignLevel(G.battleMode.level) : null;
 
+    // Beasts recover between fights — HP is a per-battle resource
+    G.creature.hp = G.creature.maxHp;
+    // Fighting is tiring
+    G.creature.energy = Math.max(0, G.creature.energy - 6);
+    G.creature.hunger = Math.max(0, G.creature.hunger - 4);
+
     if (result.winner === 'player') {
       SFX.victoryTheme();
-      G.creature.hp = Math.max(1, result.playerHpLeft);
       const xpReward = 40 + G.opponent.level * 5;
       grantXP(xpReward);
 
@@ -2515,9 +2942,9 @@ function renderBattleScreen() {
       setTimeout(() => SFX.coin(), 2000);
     } else {
       SFX.defeatTheme();
-      G.creature.hp = Math.max(1, Math.floor(G.creature.maxHp * 0.1));
-      G.creature.recoveryEvents++;
-      showToast(`Defeated... Rest and recover!`);
+      // A loss still teaches something
+      grantXP(10 + G.opponent.level * 2);
+      showToast(`Defeated... Train up and try again!`);
     }
     saveGame();
     setTimeout(() => showScreen('battle-result'), 2200);
@@ -2547,12 +2974,14 @@ function renderBattleResult() {
       <div class="result-creature" style="filter:drop-shadow(0 0 20px ${def.glow})">
         ${getSpriteHTML(G.creature.id, stageFromLevel(G.creature.level).id, 120)}
       </div>
-      <div class="result-name">${G.creature.name}</div>
+      <div class="result-name">${esc(G.creature.name)}</div>
       <div class="result-stats">
         <div class="rs-stat">HP Remaining: ${result.playerHpLeft} / ${result.playerMaxHp || G.creature.maxHp}</div>
         <div class="rs-stat">Rounds Fought: ${result.rounds.length}</div>
         ${won && camp ? `<div class="rs-reward">+${40 + G.opponent.level*5} XP  •  +${camp.coinReward} coins${camp.gear ? `  •  ${GEAR[camp.gear].icon} ${GEAR[camp.gear].name}!` : ''}</div>` : ''}
         ${won && !camp ? `<div class="rs-reward">+${40 + G.opponent.level*5} XP  •  +${20 + G.opponent.level*2} coins</div>` : ''}
+        ${!won ? `<div class="rs-reward rs-consolation">+${10 + G.opponent.level*2} XP for the experience</div>
+                  <div class="rs-tip">Tip: training in the Training Center raises stats permanently.</div>` : ''}
       </div>
       ${camp ? `
         ${won && nextLevel && nextLevel <= G.campaign.progress ? `<button class="btn-primary" onclick="startCampaignBattle(${nextLevel})">Next Level ▶</button>` : ''}
@@ -2586,7 +3015,7 @@ function renderProfile() {
       <div class="profile-sprite" style="filter:drop-shadow(0 0 24px ${def.glow})">
         ${getSpriteHTML(c.id, stageDef.id, 130)}
       </div>
-      <div class="profile-name">${c.name}</div>
+      <div class="profile-name">${esc(c.name)}</div>
       <div class="profile-title">${stageInfo ? stageInfo.name : ''} · ${def.title}</div>
     </div>
     <div class="profile-grid">
@@ -2595,14 +3024,24 @@ function renderProfile() {
         <div class="pc-row"><span>Level</span><b>${c.level} / 100</b></div>
         <div class="pc-row"><span>Stage</span><b>${stageDef.name}</b></div>
         <div class="pc-row"><span>XP</span><b>${c.xp} / ${c.level < 100 ? xpForLevel(c.level+1) : 'MAX'}</b></div>
-        <div class="pc-row"><span>Evolution Path</span><b>${evPath}</b></div>
+        <div class="pc-row"><span>Paths</span><b>${
+          (c.evolutionPaths || []).length
+            ? c.evolutionPaths.map(p => EVOLUTION_PATHS[p.path] ? EVOLUTION_PATHS[p.path].icon + ' ' + EVOLUTION_PATHS[p.path].name : '').join(', ')
+            : (evPath && EVOLUTION_PATHS[evPath] ? 'Leaning ' + EVOLUTION_PATHS[evPath].name : 'Not yet')
+        }</b></div>
       </div>
       <div class="profile-card">
         <div class="pc-title">Battle Stats</div>
-        <div class="pc-row"><span>HP</span><b>${c.hp} / ${c.maxHp}</b></div>
-        <div class="pc-row"><span>Attack</span><b>${Math.floor(def.baseStats.atk * (STAGE_POWER[stageDef.id]||1) * (1+(c.level-1)*0.03))}${c.trainedStats && c.trainedStats.atk ? ` <i class="trained-plus">+${c.trainedStats.atk}</i>` : ''}</b></div>
-        <div class="pc-row"><span>Defense</span><b>${Math.floor(def.baseStats.def * (STAGE_POWER[stageDef.id]||1) * (1+(c.level-1)*0.03))}${c.trainedStats && c.trainedStats.def ? ` <i class="trained-plus">+${c.trainedStats.def}</i>` : ''}</b></div>
-        <div class="pc-row"><span>Speed</span><b>${Math.floor(def.baseStats.spd * (STAGE_POWER[stageDef.id]||1) * (1+(c.level-1)*0.03))}${c.trainedStats && c.trainedStats.spd ? ` <i class="trained-plus">+${c.trainedStats.spd}</i>` : ''}</b></div>
+        ${(() => {
+          const s = Battle.previewStats(c);
+          const t = c.trainedStats || {};
+          const tr = v => v ? ` <i class="trained-plus">+${v} trained</i>` : '';
+          return `
+            <div class="pc-row"><span>HP</span><b>${s.hp}${tr((t.hp || 0) * 2)}</b></div>
+            <div class="pc-row"><span>Attack</span><b>${s.atk}${tr(t.atk)}</b></div>
+            <div class="pc-row"><span>Defense</span><b>${s.def}${tr(t.def)}</b></div>
+            <div class="pc-row"><span>Speed</span><b>${s.spd}${tr(t.spd)}</b></div>`;
+        })()}
         ${c.nature && NATURES[c.nature] ? `<div class="pc-row"><span>Nature</span><b>${NATURES[c.nature].icon} ${NATURES[c.nature].name}</b></div>` : ''}
       </div>
       <div class="profile-card">
@@ -2673,8 +3112,27 @@ function renderProfile() {
       `;
     })()}
 
+    <div class="customize-card settings-card">
+      <div class="customize-title">Settings</div>
+      <label class="setting-row">
+        <span>Show instructions before games</span>
+        <input type="checkbox" ${G.settings && G.settings.instructions !== false ? 'checked' : ''}
+               onchange="setSetting('instructions', this.checked)">
+      </label>
+      <label class="setting-row">
+        <span>Sound</span>
+        <input type="checkbox" ${SFX.isMuted() ? '' : 'checked'}
+               onchange="if (SFX.isMuted() === this.checked) SFX.toggleMute()">
+      </label>
+      <label class="setting-row">
+        <span>Fast battles (2x)</span>
+        <input type="checkbox" ${G.settings && G.settings.battleSpeed > 1 ? 'checked' : ''}
+               onchange="setSetting('battleSpeed', this.checked ? 2 : 1)">
+      </label>
+    </div>
+
     <div class="customize-card">
-      <div class="customize-title">Customize ${c.name}</div>
+      <div class="customize-title">Customize ${esc(c.name)}</div>
       <div class="customize-tints">
         ${[
           { label:'Natural', tint:0 },
@@ -2904,6 +3362,13 @@ function buyGear(gearId) {
   showToast(`Bought ${g.name}!`);
 }
 
+function setSetting(key, value) {
+  if (!G.settings) G.settings = {};
+  G.settings[key] = value;
+  saveGame();
+  showToast('Saved');
+}
+
 function setColorTint(tint) {
   if (!G.creature) return;
   G.creature.colorTint = tint;
@@ -2998,27 +3463,30 @@ function startTitleParade() {
 }
 
 // ---- Particle Background ----
+let titleParticlesRaf = null;
 function startParticles() {
   const canvas = document.getElementById('title-particles');
   if (!canvas) return;
+  if (titleParticlesRaf) cancelAnimationFrame(titleParticlesRaf);
   const ctx = canvas.getContext('2d');
   canvas.width = window.innerWidth;
   canvas.height = window.innerHeight;
 
-  const particles = Array.from({length: 80}, () => ({
+  const COLORS = ['#ffc531', '#ff8324', '#22e0ff', '#ff4fd8', '#b45cff'];
+  const particles = Array.from({ length: 70 }, () => ({
     x: Math.random() * canvas.width,
     y: Math.random() * canvas.height,
     r: Math.random() * 2 + 0.5,
     vx: (Math.random() - 0.5) * 0.4,
     vy: (Math.random() - 0.5) * 0.4,
     alpha: Math.random() * 0.6 + 0.2,
-    color: ['#d4a032','#e07830','#c85828','#e8c040'][Math.floor(Math.random()*4)]
+    color: COLORS[Math.floor(Math.random() * COLORS.length)]
   }));
 
   function draw() {
-    if (G.screen !== 'title') return;
+    if (G.screen !== 'title') { titleParticlesRaf = null; return; }
     ctx.clearRect(0, 0, canvas.width, canvas.height);
-    particles.forEach(p => {
+    for (const p of particles) {
       p.x += p.vx; p.y += p.vy;
       if (p.x < 0) p.x = canvas.width;
       if (p.x > canvas.width) p.x = 0;
@@ -3029,11 +3497,11 @@ function startParticles() {
       ctx.fillStyle = p.color;
       ctx.globalAlpha = p.alpha;
       ctx.fill();
-    });
+    }
     ctx.globalAlpha = 1;
-    requestAnimationFrame(draw);
+    titleParticlesRaf = requestAnimationFrame(draw);
   }
-  draw();
+  titleParticlesRaf = requestAnimationFrame(draw);
 }
 
 // ---- Button Event Listeners (global) ----
@@ -3041,17 +3509,27 @@ window.addEventListener('DOMContentLoaded', () => {
   if (typeof FX !== 'undefined') FX.init();
   loadGame();
   checkDailyStreak();
-  detectCustomSprites(found => {
-    if (!found) return;
-    // Custom art arrived after first paint — drop the parade built from the
-    // fallback SVGs so it re-renders with the real images, then repaint.
-    const parade = document.getElementById('title-parade');
-    if (parade) { parade.innerHTML = ''; delete parade.dataset.built; }
-    if (G.screen !== 'hatching' && G.screen !== 'battle') showScreen(G.screen);
-  });
 
   // Title buttons
-  document.getElementById('btn-new-game')?.addEventListener('click', () => showScreen('choose-category'));
+  document.getElementById('btn-new-game')?.addEventListener('click', () => {
+    const c = G.creature;
+    const egg = G.incubation;
+    if (c || egg) {
+      const what = c
+        ? `${c.name} (Lv.${c.level})`
+        : `the egg you're incubating`;
+      confirmDialog({
+        title: 'Start a new journey?',
+        body: `Hatching a new egg will release <b>${esc(what)}</b> for good. ` +
+              `Your coins, codex and campaign progress are kept.`,
+        confirm: 'Start Over',
+        cancel: 'Keep My Beast',
+        danger: true
+      }).then(ok => { if (ok) showScreen('choose-category'); });
+      return;
+    }
+    showScreen('choose-category');
+  });
   document.getElementById('btn-continue')?.addEventListener('click', () => {
     if (G.incubation) showScreen('incubation');
     else if (G.creature) showScreen('home');
@@ -3064,13 +3542,6 @@ window.addEventListener('DOMContentLoaded', () => {
     const name = input?.value.trim() || CREATURES[G.selectedCreature].name;
     startIncubation(G.selectedCreature, name);
     showScreen('incubation');
-  });
-
-  // Back buttons (delegated)
-  document.addEventListener('click', e => {
-    if (e.target.matches('[data-back]')) {
-      showScreen(e.target.dataset.back);
-    }
   });
 
   // Progress always saved: flush on every way a player can leave.
@@ -3090,6 +3561,9 @@ window.addEventListener('DOMContentLoaded', () => {
 
   // Resume a signed-in session on load
   if (Cloud.isSignedIn()) syncAfterSignIn();
+  window.addEventListener('online', () => {
+    if (Cloud.isSignedIn() && !Cloud.isReady()) syncAfterSignIn({ quiet: true });
+  });
 
   showScreen('title');
 });

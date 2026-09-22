@@ -45,14 +45,32 @@ You can also just **tap the egg** to pet it — it thumps like a heartbeat and
 slowly builds bond on its own.
 
 Watch the egg: it cracks, rocks, and shakes harder as the hidden bond grows,
-and the game shouts encouragement as you get close. Score well and you earn
-**incubation bonuses** that stay with your beast for life.
+and the game shouts encouragement as you get close.
+
+**How you incubate shapes your beast for life.** The egg screen shows which
+bonus you're on track for:
+
+| Bonus | How to earn it | Effect in battle |
+|-------|----------------|------------------|
+| 🛡️ Tough Shell | Mostly **Warm** (40%+ of your care) | +10% Defense |
+| 💗 Gentle Soul | Mostly **Rock** | +10% Health |
+| 💨 Swift Wings | Mostly **Sing** | +10% Speed |
+| ⚔️ Iron Will | Mostly **Shield** | +10% Attack |
+| ✨ Perfect Care | Play all four games evenly (15%+ each) | +5% to everything |
+| 💞 Heart Bond | **Pet the egg** often (tap it between games) | Heals 4% health every round |
 
 ### 3. Raise it
 Your beast hatches **weak on purpose** — a hatchling has stats in the teens.
 Care for it with **Feed, Bathe, Bond, Play, Rest**, and its vitals drop over
 time if you neglect it (the bars pulse red when it needs you). Tap your beast
-any time to pet it — it reacts, and tells you what it needs.
+any time to pet it — it reacts, and tells you what it needs. While you're away
+the bars stop falling at 12%, so coming back after a few days is never a
+disaster.
+
+**Care shows up in battle.** A hungry beast hits softer (−12% Attack), an
+exhausted one is slower (−12% Speed), an unhappy one guards worse (−8%
+Defense). Keep all four vitals at 70%+ and it's **Thriving**: +5% to
+everything. The battle screen warns you before you fight.
 
 **Training makes it permanently stronger.** Three games in the Training Center:
 
@@ -60,7 +78,9 @@ any time to pet it — it reacts, and tells you what it needs.
 - 🔥 **Endurance Burn** → Health + Defense
 - 🎯 **Focus Target** → Attack + Speed
 
-Stat gains scale with how well you play, up to +60 per stat.
+Stat gains scale with how well you play, up to +60 per stat. Each session
+costs **15 energy**, so rest between sessions. Leaving mid-session ends it
+with no reward.
 
 ### 4. Evolve
 Three life stages, each a dramatic visual change:
@@ -71,14 +91,33 @@ Three life stages, each a dramatic visual change:
 | **Teen** | 24–49 | Roughly double |
 | **Adult** | 50+ | Devastating |
 
+**How you raised it decides how it evolves.** Each stage tracks what you did
+most, and when your beast evolves it locks in a permanent path:
+
+| Path | Earned by | Bonus |
+|------|-----------|-------|
+| ⚔️ Warrior | Training | +6% Attack |
+| 🛡️ Guardian | Care & affection | +6% Health |
+| 💨 Duelist | Battling | +6% Speed |
+| 🪨 Survivor | Pulling through hard times | +6% Defense |
+
+The home screen shows which path you're heading for. Paths stack — a beast
+evolves twice, so it can end up with two different ones.
+
 ### 5. Fight
-- **Quick Battle** — a random opponent whenever you want
+- **Quick Battle** — a random opponent within a level of yours
 - **Campaign** — 40 levels across 5 themed zones, ending at the Shadow Citadel
+
+Battles play out automatically: pick three moves and a style, then watch.
+Tap **2x** to speed up or **Skip** to jump to the result. Your beast is fully
+healed after every fight, and a loss still earns some XP.
 
 Every campaign level plays differently thanks to rotating modifiers: raging
 foes (+18% attack), blitz foes (+30% speed), armored foes, ambush levels where
 you start at 75% health, and empowered bosses that drop rare gear. Earn **1–3
-stars** per level based on how much health you keep.
+stars** per level based on how much health you keep. The first few fights of
+each zone are gentle; zone bosses need a trained beast. If you're under-leveled,
+the level shows a recommended level (**Rec. Lv.**).
 
 Spend coins in the **Gear** shop on weapons, armor and trinkets.
 
@@ -97,6 +136,12 @@ seconds during long sessions. Come back any time and tap **Continue**.
 
 A backup copy is kept, so if a save is ever interrupted or corrupted the game
 recovers from the backup instead of losing your beast.
+
+Starting a **New Journey** while you have a beast asks first — it can't be
+wiped by an accidental tap. Your coins, codex and campaign progress carry over.
+
+**Settings** (instructions before each game, sound, fast battles) are at the
+bottom of the **Profile** screen.
 
 **By default, saves live on the device you play on.** Your friend's beast is on
 their phone, yours is on yours. This means:
@@ -181,9 +226,17 @@ python3 -m http.server 8000     # then open http://localhost:8000
 **Tune the campaign** — `getCampaignLevel()` in `js/campaign.js` controls
 opponent levels, modifiers and rewards.
 
+**Tune care and training** — in `js/game.js`:
+- `VITAL_DECAY_PER_MIN` / `VITAL_OFFLINE_FLOOR` — how fast vitals drop, and
+  how low they can fall while the player is away
+- `TRAIN_ENERGY_COST` — the energy price of a training session
+- `INCUBATION_BONUSES` / `EVOLUTION_PATHS` — the life-long bonuses
+
+**Tune battle effects of care** — `conditionOf()` in `js/battle.js`.
+
 **Replace character art** — drop a PNG into `assets/creatures/` named
-`<creatureId>_<phase>.png` (phases: `baby`, `teen`, `adult`). The game finds it
-automatically; missing images fall back to the built-in sprites. Prompts for
+`<creatureId>_<phase>.png` (phases: `baby`, `teen`, `adult`). The game loads it
+directly; any missing image falls back to the built-in sprite. Prompts for
 generating new art are in `assets/creatures/PROMPTS.md`.
 
 ### Branches

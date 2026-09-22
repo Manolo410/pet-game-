@@ -93,11 +93,24 @@ Commit and push. Login appears in the game automatically.
 
 ## How syncing behaves
 
-- **Signing in** compares your device save with your cloud save and keeps the
-  newer one. The other is kept as a backup, never deleted.
+- **Signing in** keeps whichever save has progress the other hasn't seen. If
+  you played on another phone since this device last synced, your account's
+  save wins, even if this device's clock says it saved more recently. If this
+  device is ahead (say you played offline), it uploads.
+- **Shared devices are safe.** Every save remembers which account it belongs
+  to. If a device holds someone else's beast, signing in loads your own cloud
+  save and parks theirs untouched; it comes back when they sign in here
+  again. If the device has a beast that was never linked to an account and
+  you already have one in the cloud, the game asks which to keep.
+- **Nothing is thrown away.** Whatever loses a sign-in decision is set aside
+  on the device in a slot that normal saving never overwrites.
+- **Signing out** saves your latest progress to the cloud first, then clears
+  the beast from the device so the next person starts fresh. If the cloud
+  can't be reached, the device keeps its save so nothing is lost.
 - **While playing**, progress pushes to the cloud a few seconds after it
   changes (batched, so it isn't a request per tap).
-- **Closing the app** fires a final save that survives the page closing.
+- **Closing the app** fires a final save that is allowed to finish after the
+  page closes.
 - **Offline or cloud unreachable**, the game keeps working on the local save
   and syncs next time.
 - **Signed out**, everything works exactly as it does today, on-device.

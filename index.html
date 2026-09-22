@@ -217,22 +217,5 @@
 <script src="js/campaign.js"></script>
 <script src="js/battle.js"></script>
 <script src="js/game.js"></script>
-
-<!-- Hatch screen post-hatch button timing -->
-<script>
-  // Show "meet your beast" button a bit after hatching
-  document.addEventListener('DOMContentLoaded', () => {
-    const orig = window.showScreen;
-    window.showScreen = function(id, data) {
-      orig(id, data);
-      if (id === 'hatching') {
-        setTimeout(() => {
-          const btn = document.getElementById('btn-after-hatch');
-          if (btn) btn.style.display = 'block';
-        }, 4500);
-      }
-    };
-  });
-</script>
 </body>
 </html>

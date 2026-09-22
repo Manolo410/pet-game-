@@ -64,9 +64,21 @@ function getCampaignLevel(n) {
     modifier = 'Armored foe: +28% DEF';
   }
 
+  // Rookie ramp: the first zone starts soft and reaches full strength by its
+  // boss, so a brand-new player's first fights are winnable (simulated: the
+  // first two levels went from ~42% to ~94% for an untrained hatchling,
+  // while the zone boss still needs some training).
+  if (n <= CAMPAIGN_LEVELS_PER_ZONE) {
+    const ramp = Math.min(1, 0.70 + (n - 1) * 0.043);
+    const m = Object.assign({ atk: 1, def: 1, hp: 1, spd: 1 }, statMods || {});
+    statMods = { atk: m.atk * ramp, def: m.def * ramp, hp: m.hp * ramp, spd: m.spd };
+  }
+
   const def = CREATURES[creatureId];
   return {
     n, zone, zoneIdx, step, isBoss,
+    // What we tell the player to aim for; bosses want a level or two extra
+    recommendedLevel: oppLevel + (isBoss ? 2 : 0),
     creature: creatureId,
     level: oppLevel,
     name: `${CAMPAIGN_EPITHETS[n % CAMPAIGN_EPITHETS.length]} ${def.name}`,
@@ -135,7 +147,8 @@ function renderCampaign() {
           ${locked
             ? '<div class="czn-lock">🔒</div>'
             : `<div class="czn-sprite">${getSpriteHTML(lvl.creature, stageFromLevel(lvl.level).id, 40)}</div>`}
-          <div class="czn-level">Lv.${lvl.level}</div>
+          <div class="czn-level">${!locked && G.creature && G.creature.level < lvl.recommendedLevel
+            ? `<span class="czn-under">Rec. Lv.${lvl.recommendedLevel}</span>` : `Lv.${lvl.level}`}</div>
           <div class="czn-stars">${starStr}</div>
         </div>
       `;
@@ -148,4 +161,9 @@ function renderCampaign() {
   }
 
   el.innerHTML = html;
+  // Deep in the campaign, open on the next fight rather than zone 1
+  const cur = el.querySelector('.node-current');
+  if (cur && cur.getBoundingClientRect().bottom > window.innerHeight - 40) {
+    cur.scrollIntoView({ block: 'center' });
+  }
 }

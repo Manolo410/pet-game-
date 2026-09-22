@@ -69,10 +69,35 @@ const Battle = (() => {
       });
     }
 
+    // Percentage bonuses earned while raising it: incubation bonuses,
+    // evolution paths, and how well it's been cared for right now.
+    let regen = 0;
+    if (isPlayer) {
+      const mult = { hp: 1, atk: 1, def: 1, spd: 1 };
+      const apply = m => { for (const k in m) if (mult[k]) mult[k] *= m[k]; };
+      for (const bonus of (creature.incubationBonuses || [])) {
+        if (bonus.mods) apply(bonus.mods);
+        if (bonus.regen) regen = Math.max(regen, bonus.regen);
+      }
+      if (typeof EVOLUTION_PATHS !== 'undefined') {
+        for (const p of (creature.evolutionPaths || [])) {
+          const def2 = EVOLUTION_PATHS[p.path];
+          if (def2) apply({ [def2.stat]: PATH_BONUS });
+        }
+      }
+      for (const c of conditionOf(creature)) apply(c.mods);
+      hp   = Math.floor(hp   * mult.hp);
+      atk  = Math.floor(atk  * mult.atk);
+      def_ = Math.floor(def_ * mult.def);
+      spd  = Math.floor(spd  * mult.spd);
+    }
+
     const startHp = isPlayer && state.mods && state.mods.playerHpPct
       ? Math.max(1, Math.floor(hp * state.mods.playerHpPct)) : hp;
 
     return {
+      side:      isPlayer ? 'player' : 'opponent',
+      regen,
       id:        creature.id,
       name:      creature.name,
       element:   def.element,
@@ -95,6 +120,22 @@ const Battle = (() => {
       buffEvade: 0,
       isBerserk: false
     };
+  }
+
+  // A neglected beast fights worse; a thriving one fights better. This is
+  // what makes feeding and resting matter outside the home screen.
+  function conditionOf(creature) {
+    const out = [];
+    if (typeof creature.hunger !== 'number') return out;
+    const { hunger, energy, happiness, hygiene } = creature;
+    if (hunger < 25)    out.push({ key: 'hungry',    label: 'Hungry',      effect: '-12% ATK', bad: true, mods: { atk: 0.88 } });
+    if (energy < 20)    out.push({ key: 'exhausted', label: 'Exhausted',   effect: '-12% SPD', bad: true, mods: { spd: 0.88 } });
+    if (happiness < 25) out.push({ key: 'unhappy',   label: 'Unhappy',     effect: '-8% DEF',  bad: true, mods: { def: 0.92 } });
+    if (hunger >= 70 && energy >= 70 && happiness >= 70 && hygiene >= 70) {
+      out.push({ key: 'thriving', label: 'Thriving', effect: '+5% all stats', bad: false,
+                 mods: { hp: 1.05, atk: 1.05, def: 1.05, spd: 1.05 } });
+    }
+    return out;
   }
 
   function buildAIMoves(def) {
@@ -189,6 +230,10 @@ const Battle = (() => {
   // ---- One turn of combat ----
   function executeTurn(attacker, defender, attackerMove, round) {
     const events = [];
+    const P = attacker.side === 'player' ? attacker : defender;
+    const O = attacker.side === 'player' ? defender : attacker;
+    const snap = e => Object.assign(e, { attackerSide: attacker.side, pHp: P.hp, oHp: O.hp });
+    events.push = function (...evs) { return Array.prototype.push.apply(this, evs.map(snap)); };
 
     // Status tick
     const tickMsgs = tickStatus(attacker);
@@ -266,7 +311,7 @@ const Battle = (() => {
 
     const elemStr = elemMult >= 1.5 ? '⚡ Super effective! ' : elemMult <= 0.65 ? '🛡️ Not very effective. ' : '';
     const hitStr  = hitCount > 1 ? ` (${hitCount} hits!)` : '';
-    events.push({ text:`${elemStr}${defender.name} took ${totalDmg} damage!${hitStr}`, type:'damage', dmg: totalDmg, target: defender.id, elemMult });
+    events.push({ text:`${elemStr}${defender.name} took ${totalDmg} damage!${hitStr}`, type:'damage', dmg: totalDmg, targetSide: defender.side, elemMult });
 
     // Drain
     if (move.effect === 'drain') {
@@ -313,6 +358,14 @@ const Battle = (() => {
         if (player.hp > 0) roundEvents.push(...executeTurn(player, opponent, pMove, round));
       }
 
+      // Heart Bond: heal a little at the end of each round
+      if (player.hp > 0 && opponent.hp > 0 && player.regen > 0 && player.hp < player.maxHp) {
+        const heal = Math.max(1, Math.floor(player.maxHp * player.regen));
+        player.hp = Math.min(player.maxHp, player.hp + heal);
+        roundEvents.push({ text: `💗 Heart Bond restores ${heal} HP!`, type: 'drain',
+                           attackerSide: 'player', pHp: player.hp, oHp: opponent.hp });
+      }
+
       rounds.push({
         round,
         events: roundEvents,
@@ -323,9 +376,14 @@ const Battle = (() => {
       if (player.hp <= 0 || opponent.hp <= 0) break;
     }
 
+    let winner;
+    if (player.hp <= 0) winner = 'opponent';
+    else if (opponent.hp <= 0) winner = 'player';
+    else winner = (player.hp / player.maxHp) >= (opponent.hp / opponent.maxHp) ? 'player' : 'opponent';
+
     return {
       rounds,
-      winner: player.hp > 0 ? 'player' : 'opponent',
+      winner,
       playerHpLeft: player.hp,
       playerMaxHp: player.maxHp,
       opponentHpLeft: opponent.hp
@@ -386,70 +444,77 @@ const Battle = (() => {
   }
 
   // ---- DOM playback ----
+  // speed: 1 = normal, 2 = fast. skipping: resolve the rest instantly.
+  let speed = 1;
+  let skipping = false;
+
+  function updateBars(pHp, oHp, playerC, opponentC) {
+    const p1Pct = hpPercent(pHp, playerC.maxHp);
+    const p2Pct = hpPercent(oHp, opponentC.maxHp);
+    if (p1HpBar) { p1HpBar.style.width = p1Pct + '%'; p1HpBar.style.background = hpColor(p1Pct); }
+    if (p2HpBar) { p2HpBar.style.width = p2Pct + '%'; p2HpBar.style.background = hpColor(p2Pct); }
+    if (p1HpNum) p1HpNum.textContent = pHp + '/' + playerC.maxHp;
+    if (p2HpNum) p2HpNum.textContent = oHp + '/' + opponentC.maxHp;
+  }
+
   async function playBattle(result, playerC, opponentC) {
     for (const round of result.rounds) {
       for (const ev of round.events) {
+        const fromPlayer = ev.attackerSide === 'player';
 
-        // Visual effects fire BEFORE the log entry
-        if (ev.type === 'move') {
-          const move = MOVES[ev.move];
-          if (move && ELEMENTS[move.element]) {
-            showMoveBanner(move.name, ELEMENTS[move.element].color);
-          }
-          const src = ev.attacker === playerC.id ? p1Sprite : p2Sprite;
-          if (src) {
-            src.classList.add('attack-lunge');
-            setTimeout(() => src.classList.remove('attack-lunge'), 500);
-          }
-          if (move) {
-            spawnAttackEffect(move.element, ev.attacker === playerC.id ? 'opp' : 'player');
-            if (move.power > 0) SFX.attack(move.element);
-          }
-        }
-
-        if (ev.type === 'evade') SFX.evadeSwish();
-        if (ev.type === 'buff') SFX.powerUp();
-        if (ev.type === 'status') SFX.debuff();
-
-        if (ev.type === 'damage') {
-          const mult = ev.elemMult || 1;
-          SFX.impact(mult);
-          const target = ev.target === opponentC.id ? p2Sprite : p1Sprite;
-          if (target) {
-            target.classList.add('hit-shake');
-            setTimeout(() => target.classList.remove('hit-shake'), 500);
-            if (typeof FX !== 'undefined') {
-              // Super-effective hits rock the whole screen
-              FX.shake(mult >= 1.25 ? 14 : 6);
-              FX.burst(target, mult >= 1.25 ? '#ffe066' : '#ff3b6b', mult >= 1.25 ? 20 : 10);
-              if (mult >= 1.25) FX.flash('rgba(255,230,102,0.35)', 260);
-              // Taking a hit tints the screen red
-              if (ev.target !== opponentC.id) FX.flash('rgba(255,59,107,0.28)', 240);
+        if (!skipping) {
+          // Visual effects fire BEFORE the log entry
+          if (ev.type === 'move') {
+            const move = MOVES[ev.move];
+            if (move && ELEMENTS[move.element]) showMoveBanner(move.name, ELEMENTS[move.element].color);
+            const src = fromPlayer ? p1Sprite : p2Sprite;
+            if (src) {
+              src.classList.add('attack-lunge');
+              setTimeout(() => src.classList.remove('attack-lunge'), 500 / speed);
+            }
+            if (move) {
+              spawnAttackEffect(move.element, fromPlayer ? 'opp' : 'player');
+              if (move.power > 0) SFX.attack(move.element);
             }
           }
-          spawnDamageNumber(ev.dmg, ev.target === opponentC.id ? 'opp' : 'player', mult);
+
+          if (ev.type === 'evade') SFX.evadeSwish();
+          if (ev.type === 'buff') SFX.powerUp();
+          if (ev.type === 'status') SFX.debuff();
+
+          if (ev.type === 'damage') {
+            const mult = ev.elemMult || 1;
+            const onOpp = ev.targetSide === 'opponent';
+            SFX.impact(mult);
+            const target = onOpp ? p2Sprite : p1Sprite;
+            if (target) {
+              target.classList.add('hit-shake');
+              setTimeout(() => target.classList.remove('hit-shake'), 500 / speed);
+              if (typeof FX !== 'undefined') {
+                // Super-effective hits rock the whole screen
+                FX.shake(mult >= 1.25 ? 14 : 6);
+                FX.burst(target, mult >= 1.25 ? '#ffe066' : '#ff3b6b', mult >= 1.25 ? 20 : 10);
+                if (mult >= 1.25) FX.flash('rgba(255,230,102,0.35)', 260);
+                // Taking a hit tints the screen red
+                if (!onOpp) FX.flash('rgba(255,59,107,0.28)', 240);
+              }
+            }
+            spawnDamageNumber(ev.dmg, onOpp ? 'opp' : 'player', mult);
+          }
         }
 
         await addLog(ev);
-        await sleep(600);
+        if (!skipping) await sleep(600);
 
-        // Update HP bars after log
-        const p1Pct = hpPercent(round.playerHp, playerC.maxHp);
-        const p2Pct = hpPercent(round.opponentHp, opponentC.maxHp);
-
-        if (p1HpBar) {
-          p1HpBar.style.width = p1Pct + '%';
-          p1HpBar.style.background = hpColor(p1Pct);
-        }
-        if (p2HpBar) {
-          p2HpBar.style.width = p2Pct + '%';
-          p2HpBar.style.background = hpColor(p2Pct);
-        }
-        if (p1HpNum) p1HpNum.textContent = round.playerHp + '/' + playerC.maxHp;
-        if (p2HpNum) p2HpNum.textContent = round.opponentHp + '/' + opponentC.maxHp;
+        // HP as of this event, so bars move with the hit that caused them
+        const pHp = typeof ev.pHp === 'number' ? ev.pHp : round.playerHp;
+        const oHp = typeof ev.oHp === 'number' ? ev.oHp : round.opponentHp;
+        updateBars(pHp, oHp, playerC, opponentC);
       }
-      await sleep(400);
+      if (!skipping) await sleep(400);
     }
+    const last = result.rounds[result.rounds.length - 1];
+    if (last) updateBars(last.playerHp, last.opponentHp, playerC, opponentC);
   }
 
   async function addLog(ev) {
@@ -476,7 +541,7 @@ const Battle = (() => {
     logEl.scrollTop = logEl.scrollHeight;
   }
 
-  function sleep(ms) { return new Promise(r => setTimeout(r, ms)); }
+  function sleep(ms) { return new Promise(r => setTimeout(r, ms / speed)); }
 
   // ---- Public API ----
   return {
@@ -494,15 +559,40 @@ const Battle = (() => {
       p2Sprite = spr2;
     },
 
-    async run(playerCreature, opponentData) {
-      const player   = buildCombatant(playerCreature, true);
-      const opponent = buildCombatant(opponentData,   false);
+    // Build both fighters up front so the screen can show their real combat
+    // HP before the first hit (it used to show a different, naive number).
+    prepare(playerCreature, opponentData) {
+      skipping = false;
+      return {
+        player:   buildCombatant(playerCreature, true),
+        opponent: buildCombatant(opponentData,   false)
+      };
+    },
+
+    async run(match) {
+      const { player, opponent } = match;
       SFX.battleStart();
       if (typeof FX !== 'undefined') { FX.flash('rgba(255,59,107,0.45)', 420); FX.shake(9); }
-      const result   = simulateBattle(player, opponent);
+      const result = simulateBattle(player, opponent);
       await playBattle(result, player, opponent);
+      skipping = false;
       return result;
     },
+
+    setSpeed(s) { speed = s > 1 ? 2 : 1; return speed; },
+    getSpeed() { return speed; },
+    skip() { skipping = true; },
+
+    // The player's real combat stats, for display outside of battle
+    previewStats(creature) {
+      const saved = state;
+      state = { selectedMoves: [], stance: 'balanced', selectedItem: null, mods: null };
+      const c = buildCombatant(creature, true);
+      state = saved;
+      return { hp: c.maxHp, atk: c.atk, def: c.def, spd: c.spd, regen: c.regen };
+    },
+
+    conditionOf,
 
     // Quick sim (no animation) for stat purposes
     quickSim(playerCreature, opponentData) {
