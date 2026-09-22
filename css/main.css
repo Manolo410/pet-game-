@@ -168,17 +168,6 @@ html, body {
   text-shadow: 0 2px 10px rgba(7,5,18,0.95), 0 0 22px rgba(7,5,18,0.8);
 }
 
-.title-egg-row {
-  display: flex;
-  gap: 8px;
-  font-size: 28px;
-  opacity: 0.6;
-  margin: 8px 0;
-}
-.title-egg-row span { animation: title-float 4s ease-in-out infinite; }
-.title-egg-row span:nth-child(2) { animation-delay: 0.8s; }
-.title-egg-row span:nth-child(3) { animation-delay: 1.6s; }
-
 .title-buttons { display: flex; flex-direction: column; gap: 12px; width: 100%; max-width: 280px; }
 
 .title-version {
@@ -351,8 +340,6 @@ html, body {
   box-shadow: 0 8px 30px rgba(0,0,0,0.4), 0 0 0 1px var(--cat-color);
 }
 .cat-card:active { transform: scale(0.97); }
-
-.cat-icon { font-size: 3rem; margin-bottom: 8px; display: block; }
 .cat-name  { font-size: 1.1rem; font-weight: 800; color: var(--cat-color); margin-bottom: 4px; }
 .cat-desc  { font-size: 0.72rem; color: var(--text-dim); line-height: 1.4; margin-bottom: 10px; }
 
@@ -392,8 +379,6 @@ html, body {
   transform: translateX(4px);
   box-shadow: 0 4px 20px rgba(0,0,0,0.3), -2px 0 0 0 var(--creature-color);
 }
-
-.csc-emoji    { font-size: 4.5rem; text-align: center; display: block; margin-bottom: 8px; }
 .csc-name     { font-size: 1.25rem; font-weight: 900; color: var(--creature-color); }
 .csc-title    { font-size: 0.78rem; color: var(--text-dim); margin-bottom: 2px; }
 .csc-role     { font-size: 0.75rem; color: var(--gold); font-weight: 700; margin-bottom: 8px; }
@@ -431,16 +416,7 @@ html, body {
   padding: 24px;
   text-align: center;
 }
-
-.name-screen-title { font-size: 1.4rem; font-weight: 900; color: var(--text); margin-bottom: 4px; }
 .name-screen-sub   { font-size: 0.85rem; color: var(--text-dim); margin-bottom: 24px; }
-
-.creature-preview-emoji {
-  font-size: 6rem;
-  display: block;
-  margin-bottom: 8px;
-  animation: title-float 3s ease-in-out infinite;
-}
 .preview-type { font-size: 0.8rem; color: var(--text-dim); margin-bottom: 24px; }
 
 #creature-name-input {
@@ -480,8 +456,6 @@ html, body {
   border: 1px solid var(--border);
 }
 .incu-creature-name { font-size: 1.1rem; font-weight: 800; color: var(--text); }
-.incu-timer { font-size: 0.85rem; color: var(--cyan); font-weight: 700; }
-.incu-timer.almost-done { color: var(--gold); animation: pulse-glow 1s infinite; }
 
 .egg-stage {
   position: relative;
@@ -500,107 +474,13 @@ html, body {
   transform: translate(-50%, -50%);
   pointer-events: none;
 }
-.egg-emoji {
-  font-size: 7rem;
-  position: relative;
-  z-index: 1;
-  display: block;
-  filter: drop-shadow(0 0 20px rgba(212,144,32,0.5));
-}
-.egg-category-label { font-size: 0.8rem; color: var(--text-dim); margin-top: 8px; }
 
 .egg-pulse   { animation: egg-float 3s ease-in-out infinite; }
 .egg-wiggle  { animation: egg-wiggle 1.5s ease-in-out infinite; }
-.egg-shaking { animation: egg-shake 0.4s ease-in-out infinite; }
 
 @keyframes egg-float  { 0%,100%{transform:translateY(0)rotate(-2deg)} 50%{transform:translateY(-12px)rotate(2deg)} }
 @keyframes egg-wiggle { 0%,100%{transform:rotate(-5deg)} 50%{transform:rotate(5deg)} }
 @keyframes egg-shake  { 0%,100%{transform:translateX(-4px)rotate(-2deg)} 50%{transform:translateX(4px)rotate(2deg)} }
-
-.incu-progress-bar {
-  position: relative;
-  height: 20px;
-  background: rgba(255,255,255,0.06);
-  border-radius: 10px;
-  margin: 0 0 16px;
-  overflow: hidden;
-  border: 1px solid var(--border);
-}
-.incu-progress-fill {
-  height: 100%;
-  background: linear-gradient(90deg, var(--gold), var(--orange));
-  border-radius: 10px;
-  transition: width 1s linear;
-  box-shadow: 0 0 12px rgba(212,144,32,0.45);
-}
-.incu-progress-label {
-  position: absolute;
-  inset: 0;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  font-size: 0.72rem;
-  font-weight: 700;
-  color: #fff;
-  mix-blend-mode: difference;
-}
-
-.care-windows {
-  display: flex;
-  gap: 8px;
-  justify-content: center;
-  margin-bottom: 20px;
-}
-.cw-slot {
-  width: 44px;
-  height: 44px;
-  border-radius: 50%;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  font-size: 1.1rem;
-  border: 2px solid;
-  transition: all 0.3s;
-}
-.cw-done   { border-color: var(--green);  background: rgba(16,185,129,0.12); }
-.cw-missed { border-color: var(--gold);   background: rgba(245,158,11,0.12); }
-.cw-active { border-color: var(--gold);   background: rgba(212,144,32,0.15); animation: pulse-glow 1s infinite; }
-.cw-future { border-color: var(--border); background: transparent; color: var(--text-muted); }
-
-.incu-stats-grid {
-  display: grid;
-  grid-template-columns: 1fr 1fr;
-  gap: 10px;
-}
-.incu-stat-card:last-child:nth-child(odd) {
-  grid-column: 1 / -1;
-}
-
-.incu-stat-card {
-  background: var(--bg-card);
-  border: 1px solid;
-  border-radius: var(--radius-sm);
-  padding: 12px 10px;
-  text-align: center;
-}
-.is-icon  { font-size: 1.6rem; margin-bottom: 4px; }
-.is-label { font-size: 0.72rem; font-weight: 700; color: var(--text-dim); margin-bottom: 6px; }
-.is-bar-track { height: 5px; background: rgba(255,255,255,0.06); border-radius: 3px; margin-bottom: 4px; overflow: hidden; }
-.is-bar-fill  { height: 100%; border-radius: 3px; transition: width 0.5s; }
-.is-value { font-size: 0.75rem; color: var(--text-muted); margin-bottom: 8px; }
-
-.btn-incu-care {
-  background: transparent;
-  border: 1px solid;
-  padding: 5px 14px;
-  border-radius: 20px;
-  font-size: 0.75rem;
-  font-weight: 700;
-  cursor: pointer;
-  transition: all 0.2s;
-  width: 100%;
-}
-.btn-incu-care:hover { opacity: 0.8; transform: scale(1.03); }
 
 /* =====================================================
    HATCHING
@@ -640,7 +520,6 @@ html, body {
   from { transform: scale(0.3) rotate(-10deg); opacity: 0; }
   to   { transform: scale(1) rotate(0); opacity: 1; }
 }
-.hatch-emoji    { font-size: 8rem; display: block; margin-bottom: 8px; }
 .hatch-name     { font-size: 2rem; font-weight: 900; color: var(--gold); }
 .hatch-subtitle { font-size: 0.9rem; color: var(--text-dim); }
 
@@ -719,7 +598,6 @@ html, body {
 }
 @keyframes aura-pulse { 0%,100%{opacity:0.4;transform:translate(-50%,-50%) scale(1)} 50%{opacity:0.7;transform:translate(-50%,-50%) scale(1.08)} }
 
-.creature-main-emoji,
 .creature-main-sprite {
   display: block;
   position: relative;
@@ -729,9 +607,9 @@ html, body {
   animation: creature-float 4s ease-in-out infinite;
   user-select: none;
 }
-.creature-main-emoji:hover,
+
 .creature-main-sprite:hover { transform: scale(1.05); }
-.creature-main-emoji.care-react,
+
 .creature-main-sprite.care-react { animation: care-bounce 0.7s ease !important; }
 
 @keyframes creature-float  { 0%,100%{transform:translateY(0)} 50%{transform:translateY(-8px)} }
@@ -849,10 +727,13 @@ html, body {
   padding: 18px;
   cursor: pointer;
   transition: all 0.2s;
-  display: flex;
-  gap: 14px;
+  display: grid;
+  grid-template-columns: auto 1fr;
+  column-gap: 14px;
+  row-gap: 3px;
   align-items: center;
 }
+.train-game-card .tg-icon { grid-row: 1 / span 3; }
 .train-game-card:hover { border-color: var(--gold); transform: translateX(4px); }
 .tg-icon   { font-size: 2.2rem; flex-shrink: 0; }
 .tg-name   { font-size: 1rem; font-weight: 800; color: var(--text); }
@@ -960,7 +841,6 @@ html, body {
   margin-bottom: 12px;
 }
 .bp-fighter       { text-align: center; flex: 1; }
-.bp-fighter-emoji { font-size: 3rem; display: block; }
 .bp-fighter-name  { font-size: 0.85rem; font-weight: 800; color: var(--text); }
 .bp-fighter-level { font-size: 0.72rem; color: var(--text-dim); }
 .bp-vs            { font-size: 1.4rem; font-weight: 900; color: var(--red); padding: 0 12px; }
@@ -1302,10 +1182,6 @@ html, body {
 .log-normal  { color: #2a1808; }
 
 /* Legacy HP bar compat (kept for fallback) */
-.hp-bar-container { width: 100%; max-width: 280px; }
-.hp-bar-label { display: flex; justify-content: space-between; font-size: 0.7rem; color: var(--text-dim); margin-bottom: 4px; }
-.hp-bar-track { height: 10px; background: rgba(255,255,255,0.08); border-radius: 5px; overflow: hidden; border: 1px solid var(--border); }
-.hp-bar-fill  { height: 100%; border-radius: 5px; transition: width 0.6s ease, background 0.3s; }
 
 /* Status badges */
 .status-badge { font-size: 0.8rem; }
@@ -1341,7 +1217,6 @@ html, body {
 .profile-header h2 { font-size: 1.2rem; font-weight: 800; }
 
 .profile-creature { text-align: center; padding: 20px 0; }
-.profile-emoji    { font-size: 6rem; display: block; margin-bottom: 8px; }
 .profile-name     { font-size: 1.8rem; font-weight: 900; }
 .profile-title    { font-size: 0.8rem; color: var(--text-dim); margin-top: 2px; }
 
@@ -1417,7 +1292,6 @@ html, body {
 }
 .codex-card.discovered { border-color: var(--border-h); }
 .codex-card.discovered:hover { transform: scale(1.04); }
-.cc-emoji    { font-size: 2.2rem; display: block; margin-bottom: 4px; }
 .cc-name     { font-size: 0.72rem; font-weight: 700; color: var(--text); }
 .cc-elem     { font-size: 0.65rem; margin-top: 2px; }
 .cc-category { font-size: 0.62rem; color: var(--text-muted); text-transform: capitalize; }
@@ -1429,13 +1303,6 @@ html, body {
   0%,100% { opacity: 1; }
   50%      { opacity: 0.6; }
 }
-
-.stage-baby     { }
-.stage-child    { }
-.stage-teen     { }
-.stage-adult    { }
-.stage-champion { filter: brightness(1.1); }
-.stage-mythic   { filter: brightness(1.2) saturate(1.3); }
 
 /* ---- Sprite container helpers ---- */
 .csc-sprite          { display: block; text-align: center; margin-bottom: 8px; }
@@ -3201,13 +3068,13 @@ body::after {
 /* =====================================================
    BARS — gradients, shine sweep, smooth fills
    ===================================================== */
-.vb-track, .xp-bar-track, .is-bar-track, .sb-track, .incu-progress-bar {
+.vb-track, .xp-bar-track, .sb-track {
   background: rgba(0,0,0,0.45);
   border: 1px solid rgba(255,255,255,0.08);
   box-shadow: inset 0 2px 6px rgba(0,0,0,0.6);
   overflow: hidden;
 }
-.vb-fill, .xp-bar-fill, .is-bar-fill, .sb-fill {
+.vb-fill, .xp-bar-fill, .sb-fill {
   position: relative;
   transition: width 0.8s cubic-bezier(0.16,1,0.3,1), background 0.4s;
   box-shadow: 0 0 12px currentColor;
@@ -3468,7 +3335,6 @@ body::after {
   #fx-bg, body::after { display: none; }
 }
 
-
 /* ---- Compositor hints: keep the constant animations on the GPU ---- */
 #fx-bg, .creature-main-sprite, .creature-aura, .egg-container,
 .hype-banner span, .confetti, .fx-burst-dot, .btn-primary::before {
@@ -3620,3 +3486,148 @@ body::after {
 .acct-msg.acct-err { color: #ff6b8f; font-weight: 700; }
 .acct-msg.acct-ok  { color: var(--green); font-weight: 700; }
 .account-box button:disabled { opacity: 0.55; cursor: not-allowed; }
+
+/* =====================================================
+   REVIEW PASS — new UI pieces
+   ===================================================== */
+
+/* Confirm dialog */
+.confirm-body {
+  font-size: 0.92rem;
+  line-height: 1.55;
+  color: var(--text);
+  margin-bottom: 18px;
+  text-align: center;
+}
+.confirm-body b { color: var(--gold); }
+.btn-danger {
+  width: 100%;
+  padding: 14px 28px;
+  border: none;
+  border-radius: 50px;
+  font-size: 1rem;
+  font-weight: 800;
+  color: #fff;
+  cursor: pointer;
+  background: linear-gradient(135deg, #ff3b6b, #d4144a);
+  box-shadow: 0 6px 22px rgba(255,59,107,0.45);
+  transition: transform 0.2s cubic-bezier(0.16,1,0.3,1), filter 0.2s;
+}
+.btn-danger:hover  { transform: translateY(-2px); filter: brightness(1.1); }
+.btn-danger:active { transform: scale(0.96); }
+
+/* Battle prep: care condition chips */
+.bp-conditions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  justify-content: center;
+  margin: -6px 0 16px;
+}
+.bp-cond {
+  font-size: 0.74rem;
+  font-weight: 800;
+  padding: 5px 11px;
+  border-radius: 20px;
+  border: 1px solid;
+}
+.bp-cond-bad  { color: #ff8fa8; border-color: rgba(255,59,107,0.5); background: rgba(255,59,107,0.12); }
+.bp-cond-good { color: #7dfcc3; border-color: rgba(47,232,154,0.5); background: rgba(47,232,154,0.12); }
+.bp-cond-tip  { width: 100%; text-align: center; font-size: 0.72rem; color: var(--text-dim); }
+
+/* Battle playback speed controls */
+.battle-speed {
+  position: absolute;
+  top: 10px;
+  right: 10px;
+  z-index: 9;
+  display: flex;
+  gap: 6px;
+}
+.bs-btn {
+  background: rgba(10,4,26,0.78);
+  border: 1px solid rgba(255,255,255,0.25);
+  color: #fff;
+  font-size: 0.74rem;
+  font-weight: 800;
+  padding: 6px 11px;
+  border-radius: 20px;
+  cursor: pointer;
+  backdrop-filter: blur(6px);
+  transition: background 0.15s, transform 0.15s;
+}
+.bs-btn:hover  { background: rgba(180,92,255,0.45); }
+.bs-btn:active { transform: scale(0.94); }
+.bs-btn:disabled { opacity: 0.45; cursor: default; }
+
+/* Battle result: consolation line */
+.rs-consolation { color: var(--cyan) !important; }
+.rs-tip { font-size: 0.76rem; color: var(--text-dim); padding-top: 6px; }
+
+/* Training: energy gate */
+.train-energy {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+  font-size: 0.8rem;
+  font-weight: 700;
+  color: var(--text-dim);
+  text-align: center;
+  margin-bottom: 14px;
+}
+.train-energy-low { color: #ff8fa8; }
+.train-rest-btn { width: auto; padding: 8px 18px; font-size: 0.82rem; }
+.train-games-grid.train-locked { opacity: 0.4; pointer-events: none; filter: grayscale(0.6); }
+
+/* Incubation: bonus preview */
+.incu-bonus-preview {
+  text-align: center;
+  font-size: 0.8rem;
+  color: var(--text);
+  margin: -6px 0 12px;
+}
+.incu-bonus-preview b { color: var(--gold); text-shadow: 0 0 10px rgba(255,197,49,0.5); }
+.incu-bonus-hint { color: var(--text-dim); font-style: italic; }
+
+/* Evolution overlay: locked-in path */
+.evolve-path {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding: 10px 18px;
+  border-radius: 14px;
+  background: rgba(180,92,255,0.14);
+  border: 1px solid rgba(180,92,255,0.45);
+  font-size: 0.95rem;
+  color: var(--text);
+}
+.evolve-path b { color: var(--pink); }
+.evolve-path span { font-size: 0.76rem; color: var(--gold); font-weight: 800; }
+
+/* Campaign: under-levelled hint */
+.czn-under { color: #ff8fa8; font-weight: 800; }
+
+/* Settings */
+.setting-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 10px 2px;
+  font-size: 0.86rem;
+  color: var(--text);
+  border-bottom: 1px solid var(--border);
+  cursor: pointer;
+}
+.setting-row:last-child { border-bottom: none; }
+.setting-row input { width: 20px; height: 20px; accent-color: var(--cyan); cursor: pointer; }
+
+/* Tap targets in timed games: no text selection or callout on long press */
+.reflex-target, .endurance-btn, .focus-target, .shield-threat, .catch-ball,
+.simon-btn, .rock-btn, .warm-heat-btn {
+  -webkit-user-select: none;
+  user-select: none;
+  -webkit-touch-callout: none;
+  touch-action: manipulation;
+}

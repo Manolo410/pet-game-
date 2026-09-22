@@ -14,6 +14,11 @@ const Cloud = (() => {
   let pushTimer = null;
   let pending = null;
   let lastPushed = '';
+  let pushedHook = null;    // told about every save the cloud accepts
+  // No writes until sign-in reconciliation has decided whose save this is —
+  // otherwise an autosave could push another player's device save into
+  // this account in the gap.
+  let ready = false;
 
   function loadSession() {
     try {
@@ -48,26 +53,33 @@ const Cloud = (() => {
     return data;
   }
 
-  // Swap an expiring access token for a fresh one
+  // Swap an expiring access token for a fresh one. Only a rejection from
+  // the server ends the session; being offline throws instead, so callers
+  // retry later rather than signing the player out (or mistaking "can't
+  // reach the cloud" for "the account has no save").
   async function refreshIfNeeded() {
     if (!session || !session.refresh_token) return false;
     const soon = Date.now() + 60_000;
     if (session.expires_at && session.expires_at > soon) return true;
+    let d;
     try {
-      const d = await api('/auth/v1/token?grant_type=refresh_token', {
+      d = await api('/auth/v1/token?grant_type=refresh_token', {
         method: 'POST', auth: false, body: { refresh_token: session.refresh_token }
       });
-      storeSession({
-        access_token: d.access_token,
-        refresh_token: d.refresh_token,
-        expires_at: Date.now() + (d.expires_in || 3600) * 1000,
-        user: d.user || session.user
-      });
-      return true;
-    } catch {
-      storeSession(null);   // refresh token rejected — force a fresh sign-in
-      return false;
+    } catch (e) {
+      if (e.status >= 400 && e.status < 500) {
+        storeSession(null);   // refresh token rejected — force a fresh sign-in
+        return false;
+      }
+      throw e;
     }
+    storeSession({
+      access_token: d.access_token,
+      refresh_token: d.refresh_token,
+      expires_at: Date.now() + (d.expires_in || 3600) * 1000,
+      user: d.user || session.user
+    });
+    return true;
   }
 
   function sessionFrom(d) {
@@ -85,6 +97,10 @@ const Cloud = (() => {
     isEnabled: () => enabled,
     isSignedIn: () => enabled && !!(session && session.access_token),
     email: () => (session && session.user && session.user.email) || null,
+    userId: () => (session && session.user && session.user.id) || null,
+    isReady: () => ready,
+    onPushed(fn) { pushedHook = fn; },
+    setReady(v) { ready = !!v; },
 
     async signUp(email, password) {
       const d = await api('/auth/v1/signup', { method: 'POST', auth: false, body: { email, password } });
@@ -101,11 +117,19 @@ const Cloud = (() => {
       return { signedIn: true };
     },
 
-    signOut() {
-      storeSession(null);
-      lastPushed = '';
+    // Push anything outstanding, then drop the session. Resolves true if
+    // the account is known to hold the latest progress.
+    async signOut(latest) {
       if (pushTimer) { clearTimeout(pushTimer); pushTimer = null; }
       pending = null;
+      let synced = false;
+      if (this.isSignedIn() && ready && latest) {
+        try { synced = await this.push(latest); } catch { synced = false; }
+      }
+      storeSession(null);
+      lastPushed = '';
+      ready = false;
+      return synced;
     },
 
     // Fetch this player's cloud save, or null if they have none yet
@@ -130,13 +154,14 @@ const Cloud = (() => {
         body: [{ user_id: uid, data, updated_at: new Date().toISOString() }]
       });
       lastPushed = JSON.stringify(data);
+      if (pushedHook) pushedHook(data);
       return true;
     },
 
     // Debounced write — the game saves on almost every action, so batch
     // those into at most one network call every few seconds.
     queuePush(data) {
-      if (!this.isSignedIn()) return;
+      if (!this.isSignedIn() || !ready) return;
       pending = data;
       if (pushTimer) return;
       pushTimer = setTimeout(async () => {
@@ -151,24 +176,32 @@ const Cloud = (() => {
       }, 4000);
     },
 
-    // Best-effort flush when the page is closing
+    // Final save as the page closes or the app is backgrounded. fetch with
+    // keepalive outlives the page and, unlike sendBeacon, can carry the
+    // auth and upsert headers PostgREST needs (sendBeacon could send
+    // neither, and Chrome refuses its JSON body anyway).
     flush(data) {
-      if (!this.isSignedIn() || !session.access_token) return;
+      if (!this.isSignedIn() || !ready || !session.access_token) return;
       const uid = session.user && session.user.id;
       if (!uid) return;
+      const json = JSON.stringify(data);
+      if (json === lastPushed) return;
       try {
-        const body = new Blob([JSON.stringify([{
-          user_id: uid, data, updated_at: new Date().toISOString()
-        }])], { type: 'application/json' });
-        // sendBeacon survives page unload where fetch usually does not.
-        // It cannot set headers, so the tokens ride in the query string —
-        // both are already client-visible values.
-        navigator.sendBeacon(
-          cfg.url.replace(/\/$/, '') +
-          '/rest/v1/saves?on_conflict=user_id&apikey=' + encodeURIComponent(cfg.anonKey) +
-          '&access_token=' + encodeURIComponent(session.access_token),
-          body
-        );
+        fetch(cfg.url.replace(/\/$/, '') + '/rest/v1/saves?on_conflict=user_id', {
+          method: 'POST',
+          keepalive: true,
+          headers: {
+            apikey: cfg.anonKey,
+            Authorization: 'Bearer ' + session.access_token,
+            'Content-Type': 'application/json',
+            Prefer: 'resolution=merge-duplicates,return=minimal'
+          },
+          body: JSON.stringify([{ user_id: uid, data, updated_at: new Date().toISOString() }])
+        }).then(r => {
+          if (!r.ok) return;
+          lastPushed = json;
+          if (pushedHook) pushedHook(data);
+        }).catch(() => {});
       } catch { /* nothing more we can do at unload */ }
     }
   };
